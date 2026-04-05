@@ -1,6 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker, useMap, Circle } from 'react-leaflet';
 import L from 'leaflet';
+import { LocateFixed } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { riskColor } from '../utils';
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -76,7 +79,91 @@ function MapFollower({ gpsPosition, isNavigating }) {
   return null;
 }
 
-// Pulsing GPS user marker icon
+// ── Recenter button error messages ───────────────────────────────────────────
+const RECENTER_ERRORS = {
+  1: 'Please allow location access.',
+  2: 'Location not available.',
+  3: 'Request timed out. Try again.',
+  unsupported: 'Geolocation not supported in this browser.',
+};
+
+// Floating "Recenter to my location" control — renders via portal into the Leaflet container
+function RecenterControl({ onLocationFound }) {
+  const map = useMap();
+  const [isLoading, setIsLoading] = useState(false);
+
+  function handleRecenter() {
+    if (!navigator.geolocation) {
+      toast.error(RECENTER_ERRORS.unsupported, { icon: '📍', duration: 4000 });
+      return;
+    }
+    setIsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setIsLoading(false);
+        map.flyTo([lat, lng], 15, { duration: 1.5 });
+        onLocationFound?.({ lat, lng, accuracy: pos.coords.accuracy });
+      },
+      (err) => {
+        setIsLoading(false);
+        toast.error(RECENTER_ERRORS[err.code] || 'Location error.', { icon: '📍', duration: 4000 });
+      },
+      { timeout: 10000, maximumAge: 30000 }
+    );
+  }
+
+  // Leaflet sets position:relative on its container — portal + absolute positioning works perfectly
+  return ReactDOM.createPortal(
+    <button
+      onClick={handleRecenter}
+      disabled={isLoading}
+      title="Recenter map to my location"
+      aria-label="Recenter map to my location"
+      style={{
+        position: 'absolute',
+        top: 80,        // below Leaflet's default zoom control (top-left)
+        right: 10,
+        zIndex: 1000,
+        width: 36,
+        height: 36,
+        borderRadius: '50%',
+        background: '#111827',
+        border: '1px solid #1e2d45',
+        boxShadow: '0 2px 14px rgba(0,0,0,0.65)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: isLoading ? 'not-allowed' : 'pointer',
+        color: isLoading ? '#475569' : '#60a5fa',
+        transition: 'background 0.2s, border-color 0.2s, color 0.2s',
+        opacity: isLoading ? 0.7 : 1,
+        padding: 0,
+      }}
+      onMouseEnter={e => {
+        if (!isLoading) {
+          e.currentTarget.style.background = '#1a2235';
+          e.currentTarget.style.borderColor = '#3b82f6';
+          e.currentTarget.style.color = '#93c5fd';
+        }
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = '#111827';
+        e.currentTarget.style.borderColor = '#1e2d45';
+        e.currentTarget.style.color = isLoading ? '#475569' : '#60a5fa';
+      }}
+    >
+      {isLoading
+        ? <span className="spin-anim" style={{ fontSize: 16, lineHeight: 1, display: 'flex' }}>⟳</span>
+        : <LocateFixed size={16} strokeWidth={2} />
+      }
+    </button>,
+    map.getContainer()
+  );
+}
+
+// Pulsing GPS user marker icon (navigation — blue)
 function gpsUserIcon() {
   return L.divIcon({
     html: `
@@ -90,12 +177,30 @@ function gpsUserIcon() {
   });
 }
 
+// Recenter marker icon (purple — distinct from navigation blue dot)
+function recenterUserIcon() {
+  return L.divIcon({
+    html: `
+      <div style="position:relative;width:28px;height:28px">
+        <div style="position:absolute;inset:0;border-radius:50%;background:#a78bfa18;border:2px solid #a78bfa60;animation:pulse 2s infinite"></div>
+        <div style="position:absolute;inset:5px;border-radius:50%;background:#a78bfa;border:2px solid #fff;box-shadow:0 0 10px #a78bfaaa"></div>
+      </div>`,
+    className: '',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
 export default function LiveMap({ shipments, selected, onSelect, planResult, gpsPosition, isNavigating, liveRoute }) {
+  // Single recenter location — updated in-place, never duplicated
+  const [recenterLocation, setRecenterLocation] = useState(null);
+
   return (
     <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%', borderRadius: 12 }}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap" />
       <MapFitter planResult={planResult} shipments={shipments} />
       <MapFollower gpsPosition={gpsPosition} isNavigating={isNavigating} />
+      <RecenterControl onLocationFound={setRecenterLocation} />
 
       {/* ── Plan result overlay ── */}
       {planResult && (
@@ -147,6 +252,33 @@ export default function LiveMap({ shipments, selected, onSelect, planResult, gps
           positions={liveRoute.polyline.map(p => [p.lat, p.lng])}
           pathOptions={{ color: '#22d3ee', weight: 7, opacity: 0.85 }}
         />
+      )}
+
+      {/* ── Recenter marker — single, updated in-place, hidden during active navigation ── */}
+      {recenterLocation && !isNavigating && (
+        <>
+          <Circle
+            center={[recenterLocation.lat, recenterLocation.lng]}
+            radius={recenterLocation.accuracy || 30}
+            pathOptions={{ color: '#a78bfa', fillColor: '#a78bfa20', fillOpacity: 1, weight: 1 }}
+          />
+          <Marker
+            position={[recenterLocation.lat, recenterLocation.lng]}
+            icon={recenterUserIcon()}
+            zIndexOffset={900}
+          >
+            <Popup>
+              <div style={{ color: '#111', fontWeight: 700, fontSize: 12 }}>
+                📍 My Location
+                {recenterLocation.accuracy && (
+                  <div style={{ fontWeight: 400, fontSize: 11, color: '#555', marginTop: 2 }}>
+                    Accuracy: ±{Math.round(recenterLocation.accuracy)}m
+                  </div>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        </>
       )}
 
       {/* ── GPS user position marker ── */}
