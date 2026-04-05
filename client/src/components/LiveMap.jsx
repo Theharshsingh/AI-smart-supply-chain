@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker, useMap, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import { riskColor } from '../utils';
 
@@ -46,6 +46,9 @@ function MapFitter({ planResult, shipments }) {
         );
         map.fitBounds(bounds, { padding: [60, 60] });
       }
+    } else if (planResult?.origin) {
+      // Origin only (e.g. "Use Current Location" without destination yet)
+      map.setView([planResult.origin.lat, planResult.origin.lng], 13, { animate: true });
     } else if (shipments.length > 0) {
       const pts = shipments.map(s => [s.currentLocation.lat, s.currentLocation.lng]);
       if (pts.length > 0) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 8 });
@@ -54,21 +57,59 @@ function MapFitter({ planResult, shipments }) {
   return null;
 }
 
-export default function LiveMap({ shipments, selected, onSelect, planResult }) {
+// Follows user's GPS position during navigation
+function MapFollower({ gpsPosition, isNavigating }) {
+  const map = useMap();
+  const prevPosRef = useRef(null);
+  useEffect(() => {
+    if (!isNavigating || !gpsPosition) return;
+    const { lat, lng } = gpsPosition;
+    // Only fly if position changed meaningfully (> ~5m)
+    if (
+      prevPosRef.current &&
+      Math.abs(prevPosRef.current.lat - lat) < 0.00005 &&
+      Math.abs(prevPosRef.current.lng - lng) < 0.00005
+    ) return;
+    prevPosRef.current = { lat, lng };
+    map.flyTo([lat, lng], Math.max(map.getZoom(), 15), { duration: 0.8 });
+  }, [gpsPosition, isNavigating, map]);
+  return null;
+}
+
+// Pulsing GPS user marker icon
+function gpsUserIcon() {
+  return L.divIcon({
+    html: `
+      <div style="position:relative;width:24px;height:24px">
+        <div style="position:absolute;inset:0;border-radius:50%;background:#3b82f620;border:2px solid #3b82f680;animation:pulse 1.8s infinite"></div>
+        <div style="position:absolute;inset:4px;border-radius:50%;background:#3b82f6;border:2px solid #fff;box-shadow:0 0 8px #3b82f6aa"></div>
+      </div>`,
+    className: '',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+}
+
+export default function LiveMap({ shipments, selected, onSelect, planResult, gpsPosition, isNavigating, liveRoute }) {
   return (
     <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%', borderRadius: 12 }}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap" />
       <MapFitter planResult={planResult} shipments={shipments} />
+      <MapFollower gpsPosition={gpsPosition} isNavigating={isNavigating} />
 
       {/* ── Plan result overlay ── */}
       {planResult && (
         <>
-          <Marker position={[planResult.origin.lat, planResult.origin.lng]} icon={makeIcon('🟢', '#22c55e', 28)}>
-            <Popup><div style={{ color: '#111', fontWeight: 700 }}>{planResult.origin.formattedAddress}</div></Popup>
-          </Marker>
-          <Marker position={[planResult.destination.lat, planResult.destination.lng]} icon={makeIcon('🔴', '#ef4444', 28)}>
-            <Popup><div style={{ color: '#111', fontWeight: 700 }}>{planResult.destination.formattedAddress}</div></Popup>
-          </Marker>
+          {planResult.origin && (
+            <Marker position={[planResult.origin.lat, planResult.origin.lng]} icon={makeIcon('🟢', '#22c55e', 28)}>
+              <Popup><div style={{ color: '#111', fontWeight: 700 }}>{planResult.origin.formattedAddress}</div></Popup>
+            </Marker>
+          )}
+          {planResult.destination && (
+            <Marker position={[planResult.destination.lat, planResult.destination.lng]} icon={makeIcon('🔴', '#ef4444', 28)}>
+              <Popup><div style={{ color: '#111', fontWeight: 700 }}>{planResult.destination.formattedAddress}</div></Popup>
+            </Marker>
+          )}
 
           {/* OSRM / Directions polylines — color coded by traffic */}
           {planResult.directionsData?.map((route, i) => {
@@ -90,13 +131,48 @@ export default function LiveMap({ shipments, selected, onSelect, planResult }) {
             );
           })}
 
-          {/* Fallback straight line */}
-          {!planResult.directionsData && (
+      {/* Fallback straight line */}
+          {!planResult.directionsData && planResult.origin && planResult.destination && (
             <Polyline
               positions={[[planResult.origin.lat, planResult.origin.lng], [planResult.destination.lat, planResult.destination.lng]]}
               pathOptions={{ color: '#3b82f6', weight: 3, opacity: 0.7, dashArray: '8 4' }}
             />
           )}
+        </>
+      )}
+
+      {/* ── Live navigation route (overrides planned route color) ── */}
+      {isNavigating && liveRoute?.polyline?.length > 1 && (
+        <Polyline
+          positions={liveRoute.polyline.map(p => [p.lat, p.lng])}
+          pathOptions={{ color: '#22d3ee', weight: 7, opacity: 0.85 }}
+        />
+      )}
+
+      {/* ── GPS user position marker ── */}
+      {gpsPosition && (
+        <>
+          <Circle
+            center={[gpsPosition.lat, gpsPosition.lng]}
+            radius={gpsPosition.accuracy || 20}
+            pathOptions={{ color: '#3b82f6', fillColor: '#3b82f620', fillOpacity: 1, weight: 1 }}
+          />
+          <Marker
+            position={[gpsPosition.lat, gpsPosition.lng]}
+            icon={gpsUserIcon()}
+            zIndexOffset={1000}
+          >
+            <Popup>
+              <div style={{ color: '#111', fontWeight: 700, fontSize: 12 }}>
+                📍 Your Location
+                {gpsPosition.accuracy && (
+                  <div style={{ fontWeight: 400, fontSize: 11, color: '#555' }}>
+                    Accuracy: ±{gpsPosition.accuracy}m
+                  </div>
+                )}
+              </div>
+            </Popup>
+          </Marker>
         </>
       )}
 

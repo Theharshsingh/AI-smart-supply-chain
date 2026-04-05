@@ -66,19 +66,50 @@ export async function fetchAutocomplete(q) {
   }
 }
 
-// OSRM driving route
+// ── OSRM step instruction formatter ──────────────────────────────────────────
+function formatOSRMInstruction(step) {
+  const type = step.maneuver.type;
+  const modifier = step.maneuver.modifier || 'straight';
+  const name = step.name;
+  const dir = modifier.replace(/-/g, ' ');
+
+  if (type === 'depart') return name ? `Head towards ${name}` : 'Start your journey';
+  if (type === 'arrive') return 'You have arrived at your destination';
+  if (type === 'turn') return name ? `Turn ${dir} onto ${name}` : `Turn ${dir}`;
+  if (type === 'continue' || type === 'new name') return name ? `Continue onto ${name}` : 'Continue straight';
+  if (type === 'roundabout' || type === 'rotary') return `Take the roundabout${name ? ` onto ${name}` : ''}`;
+  if (type === 'exit roundabout' || type === 'exit rotary') return name ? `Exit roundabout onto ${name}` : 'Exit the roundabout';
+  if (type === 'merge') return name ? `Merge onto ${name}` : 'Merge';
+  if (type === 'fork') return `Keep ${dir}${name ? ` onto ${name}` : ''}`;
+  if (type === 'end of road') return `Turn ${dir}${name ? ` onto ${name}` : ''}`;
+  return name ? `Continue on ${name}` : 'Continue straight';
+}
+
+// OSRM driving route with turn-by-turn steps
 export async function fetchOSRMRoute(from, to) {
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.code !== 'Ok' || !data.routes?.length) return null;
     const route = data.routes[0];
+    const leg = route.legs[0];
+
+    const steps = (leg?.steps || []).map((step) => ({
+      instruction: formatOSRMInstruction(step),
+      distance: Math.round(step.distance),      // metres
+      duration: Math.round(step.duration),      // seconds
+      maneuverType: step.maneuver.type,
+      maneuverModifier: step.maneuver.modifier || 'straight',
+      location: step.maneuver.location,         // [lon, lat]
+      streetName: step.name || '',
+    }));
+
     return {
-      // OSRM returns [lon, lat] — convert to {lat, lng} for Leaflet
       polyline: route.geometry.coordinates.map(([lon, lat]) => ({ lat, lng: lon })),
       distanceKm: (route.distance / 1000).toFixed(1),
       durationMin: Math.round(route.duration / 60),
+      steps,
     };
   } catch {
     return null;

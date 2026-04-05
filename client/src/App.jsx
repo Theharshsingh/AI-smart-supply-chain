@@ -34,6 +34,7 @@ export default function App() {
   const [selected, setSelected]   = useState(null);
   const [tab, setTab]             = useState('plan');
   const [planResult, setPlanResult] = useState(null);
+  const [navState, setNavState]   = useState({ gpsPosition: null, isNavigating: false, liveRoute: null });
 
   const onTime      = shipments.filter(s => s.status === 'On-time').length;
   const atRisk      = shipments.filter(s => s.status === 'Risk').length;
@@ -129,10 +130,18 @@ export default function App() {
         {/* ── Plan Route tab ── */}
         {tab === 'plan' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 16, alignItems: 'start' }}>
-            <TripPlanner onPlanResult={setPlanResult} />
+            <TripPlanner onPlanResult={setPlanResult} onNavStateChange={setNavState} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ height: 380 }}>
-                <LiveMap shipments={shipments} selected={selected} onSelect={setSelected} planResult={planResult} />
+                <LiveMap
+                  shipments={shipments}
+                  selected={selected}
+                  onSelect={setSelected}
+                  planResult={planResult}
+                  gpsPosition={navState.gpsPosition}
+                  isNavigating={navState.isNavigating}
+                  liveRoute={navState.liveRoute}
+                />
               </div>
               <AlertsPanel env={env} alerts={alerts} shipments={shipments} />
             </div>

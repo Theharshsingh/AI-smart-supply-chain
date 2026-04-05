@@ -1,7 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { planRoute, fetchAutocomplete, fetchOSRMRoute } from '../api';
+import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { riskColor, modeIcon, weatherIcon, weatherColor, fmtEta } from '../utils';
+import { useNavigation } from '../hooks/useNavigation';
+import NavigationPanel from './NavigationPanel';
 import toast from 'react-hot-toast';
+import { Navigation2, Square } from 'lucide-react';
 
 // ── Autocomplete Input ────────────────────────────────────────────────────────
 function PlaceInput({ label, icon, value, onChange, onSelect, error }) {
@@ -36,7 +40,7 @@ function PlaceInput({ label, icon, value, onChange, onSelect, error }) {
 
   return (
     <div style={{ flex: 1, minWidth: 220 }}>
-      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 5, fontWeight: 600 }}>{label}</div>
+      {label && <div style={{ fontSize: 11, color: '#64748b', marginBottom: 5, fontWeight: 600 }}>{label}</div>}
       <div style={{ position: 'relative' }}>
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <span style={{ position: 'absolute', left: 12, fontSize: 16, zIndex: 1 }}>{icon}</span>
@@ -244,7 +248,7 @@ function RouteCard({ route, selected, onSelect }) {
 }
 
 // ── Main TripPlanner ──────────────────────────────────────────────────────────
-export default function TripPlanner({ onPlanResult }) {
+export default function TripPlanner({ onPlanResult, onNavStateChange }) {
   const [from, setFrom]   = useState({ text: '', placeId: null, lat: null, lon: null });
   const [to, setTo]       = useState({ text: '', placeId: null, lat: null, lon: null });
   const [errors, setErrors] = useState({});
@@ -254,6 +258,32 @@ export default function TripPlanner({ onPlanResult }) {
   const [osrmRoute, setOsrmRoute] = useState(null);
   const [osrmLoading, setOsrmLoading] = useState(false);
 
+  const {
+    isNavigating, gpsPosition, gpsError, currentStepIndex,
+    liveRoute, isRerouting, startNavigation, stopNavigation,
+  } = useNavigation(from, to);
+
+  const { fetchLocation, isLoading: geoLoading } = useCurrentLocation();
+
+  function handleUseCurrentLocation() {
+    fetchLocation(
+      ({ lat, lon, address }) => {
+        const locationData = { text: address, placeId: null, lat, lon };
+        setFrom(locationData);
+        setErrors(e => ({ ...e, from: null }));
+        toast.success('Current location set!', { icon: '📍' });
+      },
+      (msg) => {
+        toast.error(msg, { icon: '📍', duration: 5000 });
+      }
+    );
+  }
+
+  // Propagate navigation state up to App so LiveMap can use it
+  useEffect(() => {
+    onNavStateChange?.({ gpsPosition, isNavigating, liveRoute });
+  }, [gpsPosition, isNavigating, liveRoute]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-draw OSRM route on map whenever both locations are selected
   useEffect(() => {
     let cancelled = false;
@@ -261,7 +291,12 @@ export default function TripPlanner({ onPlanResult }) {
     if (!from.lat || !to.lat) {
       setOsrmRoute(null);
       setResult(null);
-      onPlanResult?.(null);
+      // Keep origin pin on map for "Use Current Location" UX
+      onPlanResult?.(from.lat ? {
+        origin: { lat: from.lat, lng: from.lon, formattedAddress: from.text },
+        destination: null,
+        directionsData: null,
+      } : null);
       return;
     }
 
@@ -330,14 +365,41 @@ export default function TripPlanner({ onPlanResult }) {
         </div>
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <PlaceInput
-            label="FROM — Starting Location"
-            icon="🟢"
-            value={from}
-            onChange={setFrom}
-            onSelect={v => { setFrom(v); setErrors(e => ({ ...e, from: null })); }}
-            error={errors.from}
-          />
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>FROM — Starting Location</span>
+              <button
+                onClick={handleUseCurrentLocation}
+                disabled={geoLoading}
+                title="Use your current GPS location as the starting point"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  background: geoLoading ? '#1a2235' : '#0c1a3a',
+                  border: '1px solid #1e40af',
+                  borderRadius: 6, padding: '3px 10px',
+                  color: geoLoading ? '#475569' : '#60a5fa',
+                  fontSize: 11, fontWeight: 600, cursor: geoLoading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s', whiteSpace: 'nowrap',
+                  opacity: geoLoading ? 0.7 : 1,
+                }}
+                onMouseEnter={e => { if (!geoLoading) e.currentTarget.style.borderColor = '#3b82f6'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e40af'; }}
+              >
+                {geoLoading
+                  ? <><span style={{ fontSize: 10 }}>⏳</span> Fetching location…</>
+                  : <><span style={{ fontSize: 12 }}>📍</span> Use Current Location</>
+                }
+              </button>
+            </div>
+            <PlaceInput
+              label=""
+              icon="🟢"
+              value={from}
+              onChange={setFrom}
+              onSelect={v => { setFrom(v); setErrors(e => ({ ...e, from: null })); }}
+              error={errors.from}
+            />
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 2 }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a2235', border: '1px solid #1e2d45', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#475569' }}>→</div>
@@ -386,6 +448,54 @@ export default function TripPlanner({ onPlanResult }) {
         <div className="card2" style={{ textAlign: 'center', color: '#64748b', fontSize: 13 }}>
           ⏳ Calculating route…
         </div>
+      )}
+
+      {/* ── Start / Stop Navigation button ── */}
+      {osrmRoute && !result && (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          {!isNavigating ? (
+            <button
+              onClick={startNavigation}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                border: 'none', borderRadius: 10, padding: '11px 28px',
+                color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                boxShadow: '0 0 18px #22c55e44', transition: 'opacity 0.2s',
+                width: '100%', justifyContent: 'center',
+              }}
+            >
+              <Navigation2 size={16} />
+              Start Navigation
+            </button>
+          ) : (
+            <button
+              onClick={stopNavigation}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#450a0a', border: '1px solid #991b1b',
+                borderRadius: 10, padding: '11px 28px',
+                color: '#f87171', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                width: '100%', justifyContent: 'center',
+              }}
+            >
+              <Square size={14} fill="#f87171" />
+              Stop Navigation
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Navigation Panel (turn-by-turn) ── */}
+      {isNavigating && (
+        <NavigationPanel
+          liveRoute={liveRoute}
+          currentStepIndex={currentStepIndex}
+          gpsPosition={gpsPosition}
+          gpsError={gpsError}
+          isRerouting={isRerouting}
+          onStop={stopNavigation}
+        />
       )}
 
       {/* ── Results ── */}
