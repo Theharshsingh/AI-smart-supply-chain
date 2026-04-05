@@ -120,6 +120,7 @@ export default function NavigationPanel({
   gpsPosition,
   gpsError,
   isRerouting,
+  distToNextTurn,
   onStop,
 }) {
   const steps = liveRoute?.steps || [];
@@ -198,9 +199,9 @@ export default function NavigationPanel({
               <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', lineHeight: 1.3 }}>
                 {currentStep.instruction}
               </div>
-              {currentStep.distance > 0 && (
+              {(distToNextTurn != null || currentStep.distance > 0) && (
                 <div style={{ fontSize: 12, color: '#60a5fa', marginTop: 4, fontWeight: 600 }}>
-                  in {fmtDist(currentStep.distance)}
+                  in {distToNextTurn != null ? fmtDist(distToNextTurn) : fmtDist(currentStep.distance)}
                 </div>
               )}
             </div>

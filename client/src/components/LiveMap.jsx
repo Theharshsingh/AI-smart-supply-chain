@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker, useMap, Circle } from 'react-leaflet';
 import L from 'leaflet';
-import { LocateFixed, Maximize, Minimize } from 'lucide-react';
+import {
+  LocateFixed, Maximize2, Minimize2,
+  ArrowLeft, ArrowRight, ArrowUp, ArrowUpLeft, ArrowUpRight,
+  RotateCcw, RotateCw, MapPin, Wifi, WifiOff,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { riskColor } from '../utils';
 
@@ -33,6 +37,19 @@ function pinIcon(color) {
   });
 }
 
+/** Haversine distance in metres between two lat/lng points */
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // Auto-fit map to bounds when planResult changes
 function MapFitter({ planResult, shipments }) {
   const map = useMap();
@@ -60,8 +77,8 @@ function MapFitter({ planResult, shipments }) {
   return null;
 }
 
-// Follows user's GPS position during navigation
-function MapFollower({ gpsPosition, isNavigating }) {
+// Follows user's GPS position + smart zoom (close to turn → zoom in, far → zoom out)
+function MapFollower({ gpsPosition, isNavigating, distToNextTurn }) {
   const map = useMap();
   const prevPosRef = useRef(null);
   useEffect(() => {
@@ -74,9 +91,220 @@ function MapFollower({ gpsPosition, isNavigating }) {
       Math.abs(prevPosRef.current.lng - lng) < 0.00005
     ) return;
     prevPosRef.current = { lat, lng };
-    map.flyTo([lat, lng], Math.max(map.getZoom(), 15), { duration: 0.8 });
+    // Smart zoom based on distance to next maneuver
+    let zoom = 15;
+    if (distToNextTurn != null) {
+      if (distToNextTurn < 80)       zoom = 17;
+      else if (distToNextTurn < 200) zoom = 16;
+      else if (distToNextTurn > 600) zoom = 14;
+    }
+    map.flyTo([lat, lng], zoom, { duration: 0.8 });
   }, [gpsPosition, isNavigating, map]);
   return null;
+}
+
+// ── Nav HUD helpers ───────────────────────────────────────────────────────────
+function NavManeuverIcon({ type, modifier, size = 18, color = '#f1f5f9' }) {
+  const props = { size, color, strokeWidth: 2.5 };
+  const mod = modifier || 'straight';
+  if (type === 'depart' || type === 'arrive')
+    return <MapPin {...props} color={type === 'arrive' ? '#22c55e' : '#3b82f6'} />;
+  if (type === 'roundabout' || type === 'rotary') return <RotateCcw {...props} />;
+  if (type === 'exit roundabout' || type === 'exit rotary') return <RotateCw {...props} />;
+  if (mod === 'left' || mod === 'sharp left') return <ArrowLeft {...props} />;
+  if (mod === 'right' || mod === 'sharp right') return <ArrowRight {...props} />;
+  if (mod === 'slight left') return <ArrowUpLeft {...props} />;
+  if (mod === 'slight right') return <ArrowUpRight {...props} />;
+  if (mod === 'uturn') return <RotateCcw {...props} />;
+  return <ArrowUp {...props} />;
+}
+
+function fmtNavDist(m) {
+  if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
+  return `${m} m`;
+}
+function fmtNavDur(s) {
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+/** Split polyline into completed (grey) and remaining (blue) based on nearest GPS point */
+function getRouteProgress(polyline, gpsPos) {
+  if (!gpsPos || !polyline?.length) return { completed: [], remaining: polyline || [] };
+  let closestIdx = 0, minDist = Infinity;
+  polyline.forEach((pt, i) => {
+    const d = haversine(gpsPos.lat, gpsPos.lng, pt.lat, pt.lng);
+    if (d < minDist) { minDist = d; closestIdx = i; }
+  });
+  return {
+    completed: polyline.slice(0, closestIdx + 1),
+    remaining: polyline.slice(closestIdx),
+  };
+}
+
+// ── Auto-enter / exit fullscreen when navigation starts / stops ───────────────
+function NavFullscreenController({ isNavigating }) {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    if (isNavigating) {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        (container.requestFullscreen || container.webkitRequestFullscreen || (() => {})).call(container);
+      }
+    } else {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+      }
+    }
+    setTimeout(() => map.invalidateSize(), 300);
+  }, [isNavigating, map]);
+  return null;
+}
+
+// ── Google Maps–style navigation HUD overlaid on the map ─────────────────────
+function NavHUD({ isNavigating, liveRoute, currentStepIndex, distToNextTurn, gpsPosition, gpsError, isRerouting, onStop }) {
+  const map = useMap();
+  if (!isNavigating) return null;
+
+  const steps       = liveRoute?.steps || [];
+  const currentStep = steps[currentStepIndex];
+  const nextStep    = steps[currentStepIndex + 1];
+  const arrived     = currentStep?.maneuverType === 'arrive';
+
+  const remaining = steps.slice(currentStepIndex).reduce(
+    (acc, s) => ({ dist: acc.dist + s.distance, dur: acc.dur + s.duration }),
+    { dist: 0, dur: 0 }
+  );
+
+  const liveLabel = distToNextTurn != null
+    ? `in ${fmtNavDist(distToNextTurn)}`
+    : currentStep?.distance > 0 ? `in ${fmtNavDist(currentStep.distance)}` : '';
+
+  return ReactDOM.createPortal(
+    <div style={{ position: 'absolute', inset: 0, zIndex: 1050, pointerEvents: 'none', display: 'flex', flexDirection: 'column' }}>
+
+      {/* ── Top instruction bar ── */}
+      <div style={{
+        pointerEvents: 'auto',
+        background: 'linear-gradient(135deg, rgba(12,26,58,0.97), rgba(30,27,75,0.97))',
+        backdropFilter: 'blur(10px)',
+        borderBottom: '1px solid rgba(59,130,246,0.35)',
+        padding: '10px 14px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        boxShadow: '0 4px 24px rgba(0,0,0,0.55)',
+      }}>
+        {/* Maneuver icon */}
+        <div style={{
+          width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+          background: arrived ? '#052e16' : '#0c1a3a',
+          border: `2px solid ${arrived ? '#22c55e' : '#3b82f6'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {steps.length === 0
+            ? <span style={{ fontSize: 18 }}>⏳</span>
+            : <NavManeuverIcon
+                type={currentStep?.maneuverType}
+                modifier={currentStep?.maneuverModifier}
+                size={24}
+                color={arrived ? '#22c55e' : '#60a5fa'}
+              />
+          }
+        </div>
+
+        {/* Instruction + distance */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {arrived ? (
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>🏁 You have arrived!</div>
+          ) : steps.length === 0 ? (
+            <div style={{ fontSize: 13, color: '#94a3b8' }}>Calculating route…</div>
+          ) : (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {currentStep?.instruction}
+              </div>
+              {liveLabel && (
+                <div style={{ fontSize: 13, color: '#60a5fa', fontWeight: 600, marginTop: 2 }}>{liveLabel}</div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Next turn preview */}
+        {nextStep && !arrived && (
+          <div style={{
+            flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+            background: '#111827', border: '1px solid #1e2d45', borderRadius: 8, padding: '6px 10px',
+          }}>
+            <span style={{ fontSize: 9, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>THEN</span>
+            <NavManeuverIcon type={nextStep.maneuverType} modifier={nextStep.maneuverModifier} size={16} color="#64748b" />
+          </div>
+        )}
+
+        {/* GPS / rerouting status */}
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+          {isRerouting && (
+            <div style={{ background: '#422006', border: '1px solid #92400e', borderRadius: 4, padding: '2px 7px', fontSize: 9, color: '#f59e0b', fontWeight: 700 }}>
+              Rerouting…
+            </div>
+          )}
+          {gpsError ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#450a0a', border: '1px solid #991b1b', borderRadius: 4, padding: '2px 7px' }}>
+              <WifiOff size={10} color="#f87171" />
+              <span style={{ fontSize: 9, color: '#f87171', fontWeight: 600 }}>GPS Error</span>
+            </div>
+          ) : gpsPosition ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#052e16', border: '1px solid #166534', borderRadius: 4, padding: '2px 7px' }}>
+              <Wifi size={10} color="#4ade80" />
+              <span style={{ fontSize: 9, color: '#4ade80', fontWeight: 600 }}>GPS ±{gpsPosition.accuracy}m</span>
+            </div>
+          ) : (
+            <div style={{ background: '#422006', border: '1px solid #92400e', borderRadius: 4, padding: '2px 7px', fontSize: 9, color: '#f59e0b', fontWeight: 700 }}>
+              Acquiring…
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Middle: map shows through (pointer-events off) ── */}
+      <div style={{ flex: 1, pointerEvents: 'none' }} />
+
+      {/* ── Bottom summary bar ── */}
+      <div style={{
+        pointerEvents: 'auto',
+        background: 'rgba(17,24,39,0.95)',
+        backdropFilter: 'blur(10px)',
+        borderTop: '1px solid #1e2d45',
+        padding: '10px 16px',
+        display: 'flex', alignItems: 'center', gap: 16,
+        boxShadow: '0 -4px 24px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{ display: 'flex', gap: 24, flex: 1 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#f1f5f9', lineHeight: 1 }}>{fmtNavDist(remaining.dist)}</div>
+            <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>Remaining</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#22c55e', lineHeight: 1 }}>{fmtNavDur(remaining.dur)}</div>
+            <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>ETA</div>
+          </div>
+        </div>
+        {onStop && (
+          <button
+            onClick={onStop}
+            style={{
+              background: '#450a0a', border: '1px solid #991b1b', borderRadius: 8,
+              color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              padding: '8px 18px', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+            }}
+          >
+            ✕ Stop Navigation
+          </button>
+        )}
+      </div>
+    </div>,
+    map.getContainer()
+  );
 }
 
 // ── Recenter button error messages ───────────────────────────────────────────
@@ -87,32 +315,31 @@ const RECENTER_ERRORS = {
   unsupported: 'Geolocation not supported in this browser.',
 };
 
-// Floating fullscreen toggle control — renders via portal into the Leaflet container
+// Floating Fullscreen Toggle control — renders via portal into the Leaflet container
 function FullscreenControl() {
   const map = useMap();
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    function onFullscreenChange() {
-      const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      setIsFullscreen(isFull);
-      // Wait for browser transition to finish before invalidating map size
+    function onFsChange() {
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      setIsFullscreen(fsEl === map.getContainer());
       setTimeout(() => map.invalidateSize(), 200);
     }
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
     return () => {
-      document.removeEventListener('fullscreenchange', onFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
     };
   }, [map]);
 
   function toggleFullscreen() {
     const container = map.getContainer();
     if (document.fullscreenElement || document.webkitFullscreenElement) {
-      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
     } else {
-      (container.requestFullscreen || container.webkitRequestFullscreen).call(container);
+      (container.requestFullscreen || container.webkitRequestFullscreen || (() => {})).call(container);
     }
   }
 
@@ -125,7 +352,7 @@ function FullscreenControl() {
         position: 'absolute',
         top: 10,
         right: 10,
-        zIndex: 1000,
+        zIndex: 1100,
         width: 36,
         height: 36,
         borderRadius: '50%',
@@ -151,28 +378,39 @@ function FullscreenControl() {
         e.currentTarget.style.color = '#60a5fa';
       }}
     >
-      {isFullscreen
-        ? <Minimize size={16} strokeWidth={2} />
-        : <Maximize size={16} strokeWidth={2} />
-      }
+      {isFullscreen ? <Minimize2 size={16} strokeWidth={2} /> : <Maximize2 size={16} strokeWidth={2} />}
     </button>,
     map.getContainer()
   );
 }
 
 // Floating "Recenter to my location" control — renders via portal into the Leaflet container
+// Module-level flag prevents concurrent requests even if the component remounts during GPS updates.
+let _recenterInFlight = false;
+
 function RecenterControl({ onLocationFound }) {
   const map = useMap();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Sync local state with the module-level guard on mount
+  useEffect(() => {
+    if (!_recenterInFlight) setIsLoading(false);
+  }, []);
+
   function handleRecenter() {
+    if (_recenterInFlight) return;
     if (!navigator.geolocation) {
-      toast.error(RECENTER_ERRORS.unsupported, { icon: '📍', duration: 4000 });
+      toast.error(RECENTER_ERRORS.unsupported, { icon: '📍', id: 'recenter-err', duration: 4000 });
       return;
     }
+    _recenterInFlight = true;
     setIsLoading(true);
+    // Dismiss any stale recenter toast before showing a new one
+    toast.dismiss('recenter-err');
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        _recenterInFlight = false;
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         setIsLoading(false);
@@ -180,10 +418,11 @@ function RecenterControl({ onLocationFound }) {
         onLocationFound?.({ lat, lng, accuracy: pos.coords.accuracy });
       },
       (err) => {
+        _recenterInFlight = false;
         setIsLoading(false);
-        toast.error(RECENTER_ERRORS[err.code] || 'Location error.', { icon: '📍', duration: 4000 });
+        toast.error(RECENTER_ERRORS[err.code] || 'Location error.', { icon: '📍', id: 'recenter-err', duration: 4000 });
       },
-      { timeout: 10000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   }
 
@@ -264,15 +503,35 @@ function recenterUserIcon() {
   });
 }
 
-export default function LiveMap({ shipments, selected, onSelect, planResult, gpsPosition, isNavigating, liveRoute }) {
-  // Single recenter location — updated in-place, never duplicated
+export default function LiveMap({
+  shipments, selected, onSelect, planResult,
+  gpsPosition, isNavigating, liveRoute,
+  currentStepIndex, distToNextTurn, isRerouting, gpsError, onStopNavigation,
+}) {
   const [recenterLocation, setRecenterLocation] = useState(null);
+
+  // Split live route into completed (grey) + remaining (cyan) based on nearest GPS point
+  const routeProgress = useMemo(() => {
+    if (!isNavigating || !liveRoute?.polyline?.length || !gpsPosition) return null;
+    return getRouteProgress(liveRoute.polyline, gpsPosition);
+  }, [isNavigating, liveRoute, gpsPosition]);
 
   return (
     <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%', borderRadius: 12 }}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap" />
       <MapFitter planResult={planResult} shipments={shipments} />
-      <MapFollower gpsPosition={gpsPosition} isNavigating={isNavigating} />
+      <MapFollower gpsPosition={gpsPosition} isNavigating={isNavigating} distToNextTurn={distToNextTurn} />
+      <NavFullscreenController isNavigating={isNavigating} />
+      <NavHUD
+        isNavigating={isNavigating}
+        liveRoute={liveRoute}
+        currentStepIndex={currentStepIndex}
+        distToNextTurn={distToNextTurn}
+        gpsPosition={gpsPosition}
+        gpsError={gpsError}
+        isRerouting={isRerouting}
+        onStop={onStopNavigation}
+      />
       <FullscreenControl />
       <RecenterControl onLocationFound={setRecenterLocation} />
 
@@ -320,12 +579,29 @@ export default function LiveMap({ shipments, selected, onSelect, planResult, gps
         </>
       )}
 
-      {/* ── Live navigation route (overrides planned route color) ── */}
-      {isNavigating && liveRoute?.polyline?.length > 1 && (
-        <Polyline
-          positions={liveRoute.polyline.map(p => [p.lat, p.lng])}
-          pathOptions={{ color: '#22d3ee', weight: 7, opacity: 0.85 }}
-        />
+      {/* ── Live navigation route: completed (grey) + remaining (cyan) ── */}
+      {isNavigating && routeProgress ? (
+        <>
+          {routeProgress.completed.length > 1 && (
+            <Polyline
+              positions={routeProgress.completed.map(p => [p.lat, p.lng])}
+              pathOptions={{ color: '#334155', weight: 6, opacity: 0.55 }}
+            />
+          )}
+          {routeProgress.remaining.length > 1 && (
+            <Polyline
+              positions={routeProgress.remaining.map(p => [p.lat, p.lng])}
+              pathOptions={{ color: '#22d3ee', weight: 7, opacity: 0.9 }}
+            />
+          )}
+        </>
+      ) : (
+        isNavigating && liveRoute?.polyline?.length > 1 && (
+          <Polyline
+            positions={liveRoute.polyline.map(p => [p.lat, p.lng])}
+            pathOptions={{ color: '#22d3ee', weight: 7, opacity: 0.85 }}
+          />
+        )
       )}
 
       {/* ── Recenter marker — single, updated in-place, hidden during active navigation ── */}

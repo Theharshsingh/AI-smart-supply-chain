@@ -27,6 +27,7 @@ export function useNavigation(from, to) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [liveRoute, setLiveRoute]             = useState(null);   // { polyline, steps, … }
   const [isRerouting, setIsRerouting]         = useState(false);
+  const [distToNextTurn, setDistToNextTurn]   = useState(null);   // metres to next maneuver
 
   const watchIdRef          = useRef(null);
   const lastReroutePosRef   = useRef(null);
@@ -77,6 +78,7 @@ export function useNavigation(from, to) {
     setCurrentStepIndex(0);
     setGpsError(null);
     setIsRerouting(false);
+    setDistToNextTurn(null);
     lastReroutePosRef.current = null;
   }, []);
 
@@ -107,6 +109,12 @@ export function useNavigation(from, to) {
       }
     }
     if (idx !== currentStepIdxRef.current) setCurrentStepIndex(idx);
+
+    // Live distance to the current step's maneuver point
+    if (steps[idx]?.location) {
+      const [sLon, sLat] = steps[idx].location;
+      setDistToNextTurn(Math.round(haversine(gpsPosition.lat, gpsPosition.lng, sLat, sLon)));
+    }
 
     // Reroute if user has drifted 200 m from the last reroute anchor
     if (lastReroutePosRef.current && !isRerouting && to?.lat) {
@@ -148,6 +156,7 @@ export function useNavigation(from, to) {
     currentStepIndex,
     liveRoute,
     isRerouting,
+    distToNextTurn,
     startNavigation,
     stopNavigation,
   };

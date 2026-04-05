@@ -260,7 +260,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
 
   const {
     isNavigating, gpsPosition, gpsError, currentStepIndex,
-    liveRoute, isRerouting, startNavigation, stopNavigation,
+    liveRoute, isRerouting, distToNextTurn, startNavigation, stopNavigation,
   } = useNavigation(from, to);
 
   const { fetchLocation, isLoading: geoLoading } = useCurrentLocation();
@@ -281,8 +281,12 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
 
   // Propagate navigation state up to App so LiveMap can use it
   useEffect(() => {
-    onNavStateChange?.({ gpsPosition, isNavigating, liveRoute });
-  }, [gpsPosition, isNavigating, liveRoute]); // eslint-disable-line react-hooks/exhaustive-deps
+    onNavStateChange?.({
+      gpsPosition, isNavigating, liveRoute,
+      currentStepIndex, distToNextTurn, isRerouting, gpsError,
+      onStopNavigation: stopNavigation,
+    });
+  }, [gpsPosition, isNavigating, liveRoute, currentStepIndex, distToNextTurn, isRerouting, gpsError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-draw OSRM route on map whenever both locations are selected
   useEffect(() => {
@@ -494,6 +498,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
           gpsPosition={gpsPosition}
           gpsError={gpsError}
           isRerouting={isRerouting}
+          distToNextTurn={distToNextTurn}
           onStop={stopNavigation}
         />
       )}

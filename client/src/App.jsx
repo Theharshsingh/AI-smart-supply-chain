@@ -34,7 +34,11 @@ export default function App() {
   const [selected, setSelected]   = useState(null);
   const [tab, setTab]             = useState('plan');
   const [planResult, setPlanResult] = useState(null);
-  const [navState, setNavState]   = useState({ gpsPosition: null, isNavigating: false, liveRoute: null });
+  const [navState, setNavState]   = useState({
+    gpsPosition: null, isNavigating: false, liveRoute: null,
+    currentStepIndex: 0, distToNextTurn: null, isRerouting: false,
+    gpsError: null, onStopNavigation: null,
+  });
 
   const onTime      = shipments.filter(s => s.status === 'On-time').length;
   const atRisk      = shipments.filter(s => s.status === 'Risk').length;
@@ -133,7 +137,7 @@ export default function App() {
             <TripPlanner onPlanResult={setPlanResult} onNavStateChange={setNavState} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ height: 380 }}>
-                <LiveMap
+              <LiveMap
                   shipments={shipments}
                   selected={selected}
                   onSelect={setSelected}
@@ -141,6 +145,11 @@ export default function App() {
                   gpsPosition={navState.gpsPosition}
                   isNavigating={navState.isNavigating}
                   liveRoute={navState.liveRoute}
+                  currentStepIndex={navState.currentStepIndex}
+                  distToNextTurn={navState.distToNextTurn}
+                  isRerouting={navState.isRerouting}
+                  gpsError={navState.gpsError}
+                  onStopNavigation={navState.onStopNavigation}
                 />
               </div>
               <AlertsPanel env={env} alerts={alerts} shipments={shipments} />
