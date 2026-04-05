@@ -1,0 +1,96 @@
+import { useEffect, useRef, useState } from 'react';
+import { io } from 'socket.io-client';
+
+export const API_URL = 'http://localhost:4000';
+
+export function useSocket() {
+  const [data, setData] = useState({
+    shipments: [],
+    env: { traffic: 0.3, weather: 'Clear', forecastWorst: 'Clear', alerts: [], apiStatus: {}, weatherData: {}, trafficData: {} },
+    alerts: [],
+  });
+  const socketRef = useRef(null);
+
+  useEffect(() => {
+    socketRef.current = io(API_URL);
+    socketRef.current.on('update', payload => {
+      setData({ shipments: payload.shipments, env: payload.env, alerts: payload.env?.alerts || [] });
+    });
+    return () => socketRef.current.disconnect();
+  }, []);
+
+  return data;
+}
+
+export async function fetchRoutes(shipmentId) {
+  const res = await fetch(`${API_URL}/api/shipments/${shipmentId}/routes`);
+  return res.json();
+}
+
+export async function switchRoute(shipmentId, routeId) {
+  const res = await fetch(`${API_URL}/api/shipments/${shipmentId}/switch-route`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ routeId }),
+  });
+  return res.json();
+}
+
+export async function planRoute(from, to, fromPlaceId = null, toPlaceId = null, fromCoords = null, toCoords = null) {
+  const res = await fetch(`${API_URL}/api/route/plan`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to, fromPlaceId, toPlaceId, fromCoords, toCoords }),
+  });
+  return res.json();
+}
+
+// Nominatim-powered autocomplete (no server proxy needed)
+export async function fetchAutocomplete(q) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en-US,en;q=0.9' } }
+    );
+    const data = await res.json();
+    return data.map(item => ({
+      placeId: String(item.place_id),
+      description: item.display_name,
+      lat: parseFloat(item.lat),
+      lon: parseFloat(item.lon),
+      structured: {
+        main: item.display_name.split(',')[0].trim(),
+        secondary: item.display_name.split(',').slice(1, 3).join(',').trim(),
+      },
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// OSRM driving route
+export async function fetchOSRMRoute(from, to) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes?.length) return null;
+    const route = data.routes[0];
+    return {
+      // OSRM returns [lon, lat] — convert to {lat, lng} for Leaflet
+      polyline: route.geometry.coordinates.map(([lon, lat]) => ({ lat, lng: lon })),
+      distanceKm: (route.distance / 1000).toFixed(1),
+      durationMin: Math.round(route.duration / 60),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function triggerRefresh() {
+  const res = await fetch(`${API_URL}/api/refresh`, { method: 'POST' });
+  return res.json();
+}
+
+export async function fetchInsights(origin, dest) {
+  const res = await fetch(`${API_URL}/api/insights/${encodeURIComponent(origin)}/${encodeURIComponent(dest)}`);
+  return res.json();
+}
