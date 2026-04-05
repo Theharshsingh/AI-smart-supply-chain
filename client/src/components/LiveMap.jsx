@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker, useMap, Circle } from 'react-leaflet';
 import L from 'leaflet';
-import { LocateFixed } from 'lucide-react';
+import { LocateFixed, Maximize, Minimize } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { riskColor } from '../utils';
 
@@ -86,6 +86,79 @@ const RECENTER_ERRORS = {
   3: 'Request timed out. Try again.',
   unsupported: 'Geolocation not supported in this browser.',
 };
+
+// Floating fullscreen toggle control — renders via portal into the Leaflet container
+function FullscreenControl() {
+  const map = useMap();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    function onFullscreenChange() {
+      const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      setIsFullscreen(isFull);
+      // Wait for browser transition to finish before invalidating map size
+      setTimeout(() => map.invalidateSize(), 200);
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+    };
+  }, [map]);
+
+  function toggleFullscreen() {
+    const container = map.getContainer();
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } else {
+      (container.requestFullscreen || container.webkitRequestFullscreen).call(container);
+    }
+  }
+
+  return ReactDOM.createPortal(
+    <button
+      onClick={toggleFullscreen}
+      title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+      aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+      style={{
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 1000,
+        width: 36,
+        height: 36,
+        borderRadius: '50%',
+        background: '#111827',
+        border: '1px solid #1e2d45',
+        boxShadow: '0 2px 14px rgba(0,0,0,0.65)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        color: '#60a5fa',
+        transition: 'background 0.2s, border-color 0.2s, color 0.2s',
+        padding: 0,
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = '#1a2235';
+        e.currentTarget.style.borderColor = '#3b82f6';
+        e.currentTarget.style.color = '#93c5fd';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = '#111827';
+        e.currentTarget.style.borderColor = '#1e2d45';
+        e.currentTarget.style.color = '#60a5fa';
+      }}
+    >
+      {isFullscreen
+        ? <Minimize size={16} strokeWidth={2} />
+        : <Maximize size={16} strokeWidth={2} />
+      }
+    </button>,
+    map.getContainer()
+  );
+}
 
 // Floating "Recenter to my location" control — renders via portal into the Leaflet container
 function RecenterControl({ onLocationFound }) {
@@ -200,6 +273,7 @@ export default function LiveMap({ shipments, selected, onSelect, planResult, gps
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap" />
       <MapFitter planResult={planResult} shipments={shipments} />
       <MapFollower gpsPosition={gpsPosition} isNavigating={isNavigating} />
+      <FullscreenControl />
       <RecenterControl onLocationFound={setRecenterLocation} />
 
       {/* ── Plan result overlay ── */}
