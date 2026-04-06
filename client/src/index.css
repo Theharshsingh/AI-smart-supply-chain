@@ -408,6 +408,73 @@ body {
 }
 @keyframes sh { 0%{background-position:200% 0}100%{background-position:-200% 0} }
 
+/* ─── Map wrapper overlay UI ────────────────────────────────────────────── */
+.map-overlay-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 900;
+}
+
+.map-info-card {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(15,23,42,0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-md);
+  border-radius: 14px;
+  padding: 12px 16px;
+  color: var(--tx-1);
+  min-width: 220px;
+  pointer-events: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+.route-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--tx-1);
+  margin-bottom: 6px;
+}
+
+.route-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--tx-2);
+  gap: 12px;
+}
+
+.route-meta span { display: flex; align-items: center; gap: 4px; }
+
+.map-nav-panel {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 240px;
+  max-height: 170px;
+  overflow-y: auto;
+  background: rgba(15,23,42,0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-md);
+  border-radius: 14px;
+  padding: 8px;
+  pointer-events: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+.nav-step {
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(148,163,184,0.1);
+  font-size: 12px;
+  color: var(--tx-2);
+  line-height: 1.4;
+}
+
+.nav-step:last-child { border-bottom: none; }
+.nav-step.active { color: var(--tx-1); font-weight: 600; }
+
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
