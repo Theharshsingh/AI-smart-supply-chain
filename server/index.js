@@ -7,7 +7,7 @@ const cron   = require('node-cron');
 
 const { generateShipments, interpolate, advanceAlongPolyline, geocodePlace, getAutocompleteSuggestions } = require('./data');
 const { generateRoutes, calculateRisk, haversineKm } = require('./engine');
-const { fetchWeather, fetchTraffic, fetchDirections, fetchOSRMRoute, buildAlerts, buildInsights, worstForecastCondition } = require('./realtime');
+const { fetchWeather, fetchWeatherWithEta, fetchTraffic, fetchDirections, fetchOSRMRoute, buildAlerts, buildInsights, worstForecastCondition } = require('./realtime');
 const { recordTraffic, predictCongestion, predictNextHours, getTrafficPattern } = require('./trafficLearning');
 const { buildTrainRoute } = require('./trainIntelligence');
 
@@ -234,6 +234,23 @@ app.post('/api/shipments/:id/switch-route', (req, res) => {
 app.post('/api/refresh', async (req, res) => {
   await refreshGlobalEnv();
   res.json({ ok: true, env: globalEnv });
+});
+
+// ── Weather proxy — used by client weatherService for route-point queries ─────
+// Optional ?eta=<unix_ms> triggers ETA-matched forecast lookup instead of current weather.
+app.get('/api/weather', async (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+  const eta = req.query.eta ? parseInt(req.query.eta, 10) : null;
+
+  if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'lat and lng required' });
+
+  try {
+    const data = eta ? await fetchWeatherWithEta(lat, lng, eta) : await fetchWeather(lat, lng);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 io.on('connection', socket => socket.emit('update', { shipments, env: globalEnv }));

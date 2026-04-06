@@ -194,4 +194,61 @@ async function fetchOSRMRoute(oLat, oLng, dLat, dLng) {
   }
 }
 
-module.exports = { fetchWeather, fetchTraffic, fetchDirections, fetchOSRMRoute, buildAlerts, buildInsights, worstForecastCondition };
+// ── ETA-matched weather fetch ──────────────────────────────────────────────────
+/**
+ * Fetch weather matched to the ETA time of a route waypoint.
+ * - If ETA is within 3 hours → use current weather (faster, more accurate).
+ * - If ETA > 3 hours away → find the OWM 5-day/3h forecast slot nearest to ETA.
+ * Falls back to heuristic if no API key.
+ *
+ * @param {number} lat
+ * @param {number} lng
+ * @param {number} etaMs – absolute Unix timestamp (ms) when user will reach this point
+ */
+async function fetchWeatherWithEta(lat, lng, etaMs) {
+  const nowMs = Date.now();
+  const THREE_HOURS = 3 * 60 * 60 * 1000;
+
+  // Near-term: current weather is accurate enough
+  if (!etaMs || (etaMs - nowMs) < THREE_HOURS) {
+    return fetchWeather(lat, lng);
+  }
+
+  if (!OWM_KEY || OWM_KEY.startsWith('your_')) {
+    return { condition: 'Clear', temp: 28, humidity: 60, windSpeed: 12, description: 'clear sky', forecast: [], source: 'heuristic', forecastTime: null };
+  }
+
+  try {
+    const etaSec = Math.floor(etaMs / 1000);
+    // OWM 5-day/3h forecast — cnt=40 gives full 5 days
+    const fc = await axios.get(
+      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${OWM_KEY}&units=metric&cnt=40`,
+      { timeout: 8000 }
+    );
+
+    const slots = fc.data.list;
+    if (!slots?.length) throw new Error('empty forecast');
+
+    // Find forecast slot whose dt is closest to etaSec
+    const best = slots.reduce((a, b) =>
+      Math.abs(b.dt - etaSec) < Math.abs(a.dt - etaSec) ? b : a
+    );
+
+    return {
+      condition:    owmIdToLabel(best.weather[0].id),
+      temp:         Math.round(best.main.temp),
+      humidity:     best.main.humidity,
+      windSpeed:    Math.round(best.wind.speed * 3.6),
+      description:  best.weather[0].description,
+      visibility:   null,                          // not in /forecast endpoint
+      forecast:     [],
+      source:       'openweathermap_forecast',
+      forecastTime: new Date(best.dt * 1000).toISOString(),
+    };
+  } catch (err) {
+    console.error('[WeatherEta]', err.message);
+    return fetchWeather(lat, lng);                 // graceful fallback
+  }
+}
+
+module.exports = { fetchWeather, fetchWeatherWithEta, fetchTraffic, fetchDirections, fetchOSRMRoute, buildAlerts, buildInsights, worstForecastCondition };

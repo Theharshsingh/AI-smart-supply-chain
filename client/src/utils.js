@@ -42,3 +42,25 @@ export function fmtEta(h) {
   if (h < 1) return '< 1h';
   return `${Math.round(h)}h`;
 }
+
+/** Maps a weather risk level to a display colour */
+export function weatherRiskColor(risk) {
+  if (risk === 'high'   || risk === 'severe')   return '#ef4444';
+  if (risk === 'medium' || risk === 'moderate') return '#f59e0b';
+  if (risk === 'light')                         return '#84cc16';
+  return '#22c55e';
+}
+
+/** Returns an emoji for a weather condition string */
+export function conditionEmoji(condition = '') {
+  const map = {
+    Clear: '☀️', Clouds: '☁️', Cloudy: '☁️',
+    Rain: '🌧️', Drizzle: '🌦️',
+    Thunderstorm: '⛈️', Storm: '⛈️',
+    Snow: '❄️',
+    Mist: '🌫️', Fog: '🌫️', Haze: '🌫️',
+    Dust: '💨', Smoke: '💨', Sand: '💨',
+    Tornado: '🌪️', Squall: '🌀',
+  };
+  return map[condition] || '🌤️';
+}

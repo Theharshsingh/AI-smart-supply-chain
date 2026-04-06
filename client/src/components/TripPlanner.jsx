@@ -4,7 +4,11 @@ import RouteSelector from './RouteSelector';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { riskColor, modeIcon, weatherIcon, weatherColor, fmtEta } from '../utils';
 import { useNavigation } from '../hooks/useNavigation';
+import { useRouteWeather } from '../hooks/useRouteWeather';
 import NavigationPanel from './NavigationPanel';
+import WeatherAlertBanner from './WeatherAlertBanner';
+import WeatherSegmentPanel from './WeatherSegmentPanel';
+import RouteAlternativePanel from './RouteAlternativePanel';
 import toast from 'react-hot-toast';
 import { Navigation2, Square, Package } from 'lucide-react';
 
@@ -249,7 +253,7 @@ function RouteCard({ route, selected, onSelect }) {
 }
 
 // ── Main TripPlanner ──────────────────────────────────────────────────────────
-export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShipment, onShipmentArrived }) {
+export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShipment, onShipmentArrived, onWeatherUpdate }) {
   const [from, setFrom]   = useState({ text: '', placeId: null, lat: null, lon: null });
   const [to, setTo]       = useState({ text: '', placeId: null, lat: null, lon: null });
   const [errors, setErrors] = useState({});
@@ -273,6 +277,24 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
     isNavigating, gpsPosition, gpsError, currentStepIndex,
     liveRoute, isRerouting, distToNextTurn, startNavigation, stopNavigation,
   } = useNavigation(from, to, osrmRoutes?.[selectedRouteIdx] ?? null, handleArrived);
+
+  // ── Route weather monitoring ──────────────────────────────────────────────
+  const currentPolyline = osrmRoutes?.[selectedRouteIdx]?.polyline ?? null;
+  const currentDuration = osrmRoutes?.[selectedRouteIdx]?.durationMin ?? 0;
+  const {
+    weatherPoints, routeAlerts, routeAnalysis, loading: weatherLoading,
+    rerouteLoading, severeCount, moderateCount, lightCount,
+  } = useRouteWeather(currentPolyline, currentDuration, osrmRoutes);
+
+  // Propagate weather points up to App → LiveMap
+  useEffect(() => {
+    onWeatherUpdate?.(weatherPoints);
+  }, [weatherPoints, onWeatherUpdate]);
+
+  // Stable key per route so WeatherAlertBanner resets on route change
+  const routeWeatherKey = currentPolyline?.length
+    ? `${currentPolyline[0]?.lat},${currentPolyline[currentPolyline.length - 1]?.lat}`
+    : null;
 
   const { fetchLocation, isLoading: geoLoading } = useCurrentLocation();
 
@@ -491,6 +513,18 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
         />
       )}
 
+      {/* ── Weather alert banner ── */}
+      {osrmRoutes?.length > 0 && (
+        <WeatherAlertBanner
+          severeCount={severeCount}
+          moderateCount={moderateCount}
+          lightCount={lightCount}
+          routeAlerts={routeAlerts}
+          loading={weatherLoading}
+          routeKey={routeWeatherKey}
+        />
+      )}
+
       {/* ── Start / Stop Navigation button ── */}
       {osrmRoutes?.length > 0 && !result && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -553,6 +587,27 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
             </>
           )}
         </div>
+      )}
+
+      {/* ── Alternative route weather comparison ── */}
+      {osrmRoutes?.length > 1 && !result && (
+        <RouteAlternativePanel
+          routeAnalysis={routeAnalysis}
+          rerouteLoading={rerouteLoading}
+          selectedIdx={selectedRouteIdx}
+          onSelectRoute={idx => {
+            setSelectedRouteIdx(idx);
+            toast.success(`Switched to Route ${idx + 1}`, { icon: '🔀' });
+          }}
+        />
+      )}
+
+      {/* ── Route weather segment panel ── */}
+      {(weatherPoints.length > 0 || weatherLoading) && !result && (
+        <WeatherSegmentPanel
+          weatherPoints={weatherPoints}
+          loading={weatherLoading}
+        />
       )}
 
       {/* ── Navigation Panel (turn-by-turn) ── */}

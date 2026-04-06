@@ -50,6 +50,7 @@ export default function App() {
   const [selected, setSelected]   = useState(null);
   const [tab, setTab]             = useState('plan');
   const [planResult, setPlanResult] = useState(null);
+  const [weatherPoints, setWeatherPoints] = useState([]);
   const [dark, setDark]           = useState(false);
   const [navState, setNavState]   = useState({
     gpsPosition: null, isNavigating: false, liveRoute: null,
@@ -226,6 +227,7 @@ export default function App() {
                   isRerouting={navState.isRerouting}
                   gpsError={navState.gpsError}
                   onStopNavigation={navState.onStopNavigation}
+                  weatherPoints={weatherPoints}
                 />
               </div>
               <AlertsPanel env={env} alerts={alerts} shipments={shipments} />
@@ -235,6 +237,7 @@ export default function App() {
               onNavStateChange={setNavState}
               onStartShipment={handleStartShipment}
               onShipmentArrived={handleShipmentArrived}
+              onWeatherUpdate={setWeatherPoints}
             />
           </div>
 

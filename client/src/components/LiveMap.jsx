@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import ReactDOM from 'react-dom';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker, useMap, Circle } from 'react-leaflet';
 import L from 'leaflet';
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { riskColor } from '../utils';
+import RouteWeatherOverlay from './RouteWeatherOverlay';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -560,6 +561,7 @@ export default function LiveMap({
   shipments, selected, onSelect, planResult,
   gpsPosition, isNavigating, liveRoute,
   currentStepIndex, distToNextTurn, isRerouting, gpsError, onStopNavigation,
+  weatherPoints,
 }) {
   const [recenterLocation, setRecenterLocation] = useState(null);
   const tolls = planResult?.tolls || [];
@@ -594,6 +596,9 @@ export default function LiveMap({
         currentStepIndex={currentStepIndex}
         isNavigating={isNavigating}
       />
+
+      {/* ── Route weather overlay ── */}
+      <RouteWeatherOverlay weatherPoints={weatherPoints} />
 
       {/* ── Plan result overlay ── */}
       {planResult && (
@@ -734,7 +739,7 @@ export default function LiveMap({
         const poly = s.polyline;
 
         return (
-          <div key={s.id}>
+          <Fragment key={s.id}>
             {/* Route: real polyline or straight line */}
             {poly && poly.length > 1 ? (
               <Polyline
@@ -787,7 +792,7 @@ export default function LiveMap({
                 </div>
               </Popup>
             </Marker>
-          </div>
+          </Fragment>
         );
       })}
     </MapContainer>
