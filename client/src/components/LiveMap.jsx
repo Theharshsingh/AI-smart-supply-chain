@@ -503,6 +503,49 @@ function recenterUserIcon() {
   });
 }
 
+// ── Route info card + nav steps overlay (portalled into map container) ────────
+function MapOverlayUI({ planResult, liveRoute, currentStepIndex, isNavigating }) {
+  const map = useMap();
+  if (isNavigating) return null; // NavHUD takes over during navigation
+
+  const selIdx = planResult?.selectedRouteIdx ?? 0;
+  const route = planResult?.directionsData?.[selIdx];
+  const steps = liveRoute?.steps || [];
+
+  const hasRoute = route || (planResult?.origin && planResult?.destination);
+  if (!hasRoute && !steps.length) return null;
+
+  const distKm = route?.distanceKm ?? planResult?.distanceKm;
+  const durMin = route?.durationMin ?? planResult?.durationMin;
+
+  return ReactDOM.createPortal(
+    <div className="map-overlay-ui">
+      {/* Info card — bottom left */}
+      {hasRoute && (
+        <div className="map-info-card">
+          <div className="route-title">🛣️ Fastest Route</div>
+          <div className="route-meta">
+            {durMin != null && <span>⏱ {durMin} min</span>}
+            {distKm != null && <span>📍 {distKm} km</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Nav steps panel — bottom right */}
+      {steps.length > 0 && (
+        <div className="map-nav-panel">
+          {steps.map((step, i) => (
+            <div key={i} className={`nav-step${i === currentStepIndex ? ' active' : ''}`}>
+              {step.instruction}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>,
+    map.getContainer()
+  );
+}
+
 // Toll booth marker icon
 function tollIcon() {
   return L.divIcon({
@@ -545,6 +588,12 @@ export default function LiveMap({
       />
       <FullscreenControl />
       <RecenterControl onLocationFound={setRecenterLocation} />
+      <MapOverlayUI
+        planResult={planResult}
+        liveRoute={liveRoute}
+        currentStepIndex={currentStepIndex}
+        isNavigating={isNavigating}
+      />
 
       {/* ── Plan result overlay ── */}
       {planResult && (
