@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 import { useSocket } from './api';
@@ -24,7 +25,13 @@ const TABS = [
 
 function KpiCard({ icon, iconBg, label, value, badge, badgeColor, badgeBg, sub }) {
   return (
-    <div className="kpi-card">
+    <motion.div
+      className="kpi-card"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.4,0,0.2,1] }}
+      whileHover={{ y: -4, transition: { duration: 0.18 } }}
+    >
       <div className="kpi-top">
         <div className="kpi-icon" style={{ background: iconBg }}>{icon}</div>
         {badge && (
@@ -34,7 +41,7 @@ function KpiCard({ icon, iconBg, label, value, badge, badgeColor, badgeBg, sub }
       <div className="kpi-val">{value}</div>
       <div className="kpi-lbl">{label}</div>
       {sub && <div className="kpi-sub">{sub}</div>}
-    </div>
+    </motion.div>
   );
 }
 
@@ -170,37 +177,37 @@ export default function App() {
 
           {/* KPI row */}
           <div className="kpi-grid">
-            <KpiCard icon="📦" iconBg="var(--blue-50)"
+            <KpiCard icon="📦" iconBg="rgba(59,130,246,0.15)"
               label="Total Shipments" value={shipments.length}
-              badge={`${shipments.length} active`} badgeColor="var(--blue)" badgeBg="var(--blue-100)" />
-            <KpiCard icon="✅" iconBg="var(--green-50)"
+              badge={`${shipments.length} active`} badgeColor="#60a5fa" badgeBg="rgba(59,130,246,0.12)" />
+            <KpiCard icon="✅" iconBg="rgba(34,197,94,0.15)"
               label="On-Time" value={onTime}
-              badge={`${onTimePct}%`} badgeColor="var(--green-700)" badgeBg="var(--green-100)"
+              badge={`${onTimePct}%`} badgeColor="#4ade80" badgeBg="rgba(34,197,94,0.12)"
               sub="of total fleet" />
-            <KpiCard icon="⚠️" iconBg="var(--amber-50)"
+            <KpiCard icon="⚠️" iconBg="rgba(245,158,11,0.15)"
               label="At Risk" value={atRisk}
               badge={atRisk > 0 ? 'Attention' : 'Clear'}
-              badgeColor={atRisk > 0 ? 'var(--amber-700)' : 'var(--green-700)'}
-              badgeBg={atRisk > 0 ? 'var(--amber-100)' : 'var(--green-100)'} />
-            <KpiCard icon="🚨" iconBg="var(--red-50)"
+              badgeColor={atRisk > 0 ? '#fcd34d' : '#4ade80'}
+              badgeBg={atRisk > 0 ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)'} />
+            <KpiCard icon="🚨" iconBg="rgba(239,68,68,0.15)"
               label="Delayed" value={delayed}
               badge={delayed > 0 ? 'Action needed' : 'None'}
-              badgeColor={delayed > 0 ? 'var(--red-700)' : 'var(--green-700)'}
-              badgeBg={delayed > 0 ? 'var(--red-100)' : 'var(--green-100)'} />
-            <KpiCard icon="📊" iconBg="var(--violet-50)"
+              badgeColor={delayed > 0 ? '#f87171' : '#4ade80'}
+              badgeBg={delayed > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)'} />
+            <KpiCard icon="📊" iconBg="rgba(167,139,250,0.15)"
               label="Avg Risk" value={`${avgRisk}%`}
               badge={avgRisk > 60 ? 'High' : avgRisk > 40 ? 'Medium' : 'Low'}
-              badgeColor={avgRisk > 60 ? 'var(--red-700)' : avgRisk > 40 ? 'var(--amber-700)' : 'var(--green-700)'}
-              badgeBg={avgRisk > 60 ? 'var(--red-100)' : avgRisk > 40 ? 'var(--amber-100)' : 'var(--green-100)'} />
+              badgeColor={avgRisk > 60 ? '#f87171' : avgRisk > 40 ? '#fcd34d' : '#4ade80'}
+              badgeBg={avgRisk > 60 ? 'rgba(239,68,68,0.12)' : avgRisk > 40 ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)'} />
             {autoSwitched > 0 && (
-              <KpiCard icon="🤖" iconBg="var(--violet-50)"
+              <KpiCard icon="🤖" iconBg="rgba(167,139,250,0.15)"
                 label="Auto-Switched" value={autoSwitched}
-                badge="By AI" badgeColor="var(--violet-700)" badgeBg="var(--violet-100)" />
+                badge="By AI" badgeColor="#a78bfa" badgeBg="rgba(167,139,250,0.12)" />
             )}
             {alerts?.length > 0 && (
-              <KpiCard icon="🔔" iconBg="var(--red-50)"
+              <KpiCard icon="🔔" iconBg="rgba(239,68,68,0.15)"
                 label="Live Alerts" value={alerts.length}
-                badge="Real-time" badgeColor="var(--red-700)" badgeBg="var(--red-100)" />
+                badge="Real-time" badgeColor="#f87171" badgeBg="rgba(239,68,68,0.12)" />
             )}
           </div>
 
@@ -233,12 +240,14 @@ export default function App() {
 
           {/* ── My Shipments ── */}
           {tab === 'dashboard' && (
+            <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.3 }}>
             <ShipmentDashboard
               history={history}
               onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
               onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
               onComplete={id => { completeShipment(id); toast.success('🏁 Delivery Successful!', { icon: '✅', duration: 4000 }); }}
             />
+            </motion.div>
           )}
 
           {/* ── Routes ── */}
