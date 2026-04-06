@@ -170,6 +170,58 @@ export async function fetchOSRMRoutes(from, to) {
   }
 }
 
+// ── Haversine for toll proximity check ──────────────────────────────────────
+function haversineToll(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function isNearPolyline(lat, lon, polyline, thresholdM = 120) {
+  for (let i = 0; i < polyline.length - 1; i++) {
+    const { lat: lat1, lng: lon1 } = polyline[i];
+    const { lat: lat2, lng: lon2 } = polyline[i + 1];
+    const dx = lon2 - lon1, dy = lat2 - lat1;
+    const lenSq = dx * dx + dy * dy;
+    const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((lon - lon1) * dx + (lat - lat1) * dy) / lenSq));
+    if (haversineToll(lat, lon, lat1 + t * dy, lon1 + t * dx) <= thresholdM) return true;
+  }
+  return false;
+}
+
+export async function fetchTollsAlongRoute(polyline) {
+  if (!polyline?.length) return [];
+  try {
+    const lats = polyline.map(p => p.lat);
+    const lngs = polyline.map(p => p.lng);
+    const south = Math.min(...lats) - 0.01;
+    const north = Math.max(...lats) + 0.01;
+    const west  = Math.min(...lngs) - 0.01;
+    const east  = Math.max(...lngs) + 0.01;
+    const query = `[out:json][timeout:25];(node["barrier"="toll_booth"](${south},${west},${north},${east});node["toll"="yes"](${south},${west},${north},${east});node["highway"="toll_gantry"](${south},${west},${north},${east}););out body;`;
+    const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
+    const data = await res.json();
+    return (data.elements || [])
+      .filter(el => isNearPolyline(el.lat, el.lon, polyline))
+      .map(el => ({
+        id: el.id,
+        lat: el.lat,
+        lon: el.lon,
+        name: el.tags?.name || el.tags?.['name:en'] || null,
+        operator: el.tags?.operator || null,
+        fee: el.tags?.fee || null,
+        charge: el.tags?.charge || null,
+        currency: el.tags?.currency || 'INR',
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function triggerRefresh() {
   const res = await fetch(`${API_URL}/api/refresh`, { method: 'POST' });
   return res.json();
