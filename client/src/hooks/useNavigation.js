@@ -19,8 +19,9 @@ function haversine(lat1, lon1, lat2, lon2) {
  *
  * @param {{ lat: number, lon: number } | null} from  – starting coord
  * @param {{ lat: number, lon: number } | null} to    – destination coord
+ * @param {{ polyline, steps, distanceKm, durationMin } | null} selectedRoute – locked route to navigate
  */
-export function useNavigation(from, to) {
+export function useNavigation(from, to, selectedRoute = null) {
   const [isNavigating, setIsNavigating]       = useState(false);
   const [gpsPosition, setGpsPosition]         = useState(null);   // { lat, lng, accuracy }
   const [gpsError, setGpsError]               = useState(null);
@@ -85,6 +86,12 @@ export function useNavigation(from, to) {
   // ── Initial route fetch when navigation starts ────────────────────────────
   useEffect(() => {
     if (!isNavigating || !from?.lat || !to?.lat) return;
+    // Use the pre-selected route directly — do NOT re-fetch a different route
+    if (selectedRoute?.steps?.length) {
+      setLiveRoute(selectedRoute);
+      lastReroutePosRef.current = { lat: from.lat, lng: from.lon ?? from.lng };
+      return;
+    }
     fetchOSRMRoute(from, to).then((route) => {
       if (route) {
         setLiveRoute(route);
@@ -116,8 +123,8 @@ export function useNavigation(from, to) {
       setDistToNextTurn(Math.round(haversine(gpsPosition.lat, gpsPosition.lng, sLat, sLon)));
     }
 
-    // Reroute if user has drifted 200 m from the last reroute anchor
-    if (lastReroutePosRef.current && !isRerouting && to?.lat) {
+    // Reroute if user has drifted 200 m — disabled when locked to a selected route
+    if (!selectedRoute && lastReroutePosRef.current && !isRerouting && to?.lat) {
       const drift = haversine(
         gpsPosition.lat,
         gpsPosition.lng,

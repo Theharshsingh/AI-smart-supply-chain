@@ -263,7 +263,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
   const {
     isNavigating, gpsPosition, gpsError, currentStepIndex,
     liveRoute, isRerouting, distToNextTurn, startNavigation, stopNavigation,
-  } = useNavigation(from, to);
+  } = useNavigation(from, to, osrmRoutes?.[selectedRouteIdx] ?? null);
 
   const { fetchLocation, isLoading: geoLoading } = useCurrentLocation();
 

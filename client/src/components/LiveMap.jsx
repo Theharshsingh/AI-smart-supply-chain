@@ -551,19 +551,18 @@ export default function LiveMap({
 
           {/* OSRM / Directions polylines — highlight selected, dim others */}
           {planResult.directionsData?.map((route, i) => {
-            const ROUTE_COLORS = ['#3b82f6', '#a78bfa', '#22c55e', '#f59e0b'];
+            const ROUTE_COLORS = ['#1d4ed8', '#dc2626', '#15803d', '#b45309'];
             const selIdx = planResult.selectedRouteIdx ?? 0;
             const isSelected = i === selIdx;
-            const color = ROUTE_COLORS[i] || '#64748b';
-            // Render non-selected routes first (lower z-index), selected last (on top)
+            const color = ROUTE_COLORS[i] || '#334155';
             return (
               <Polyline key={i}
                 positions={route.polyline.map(p => [p.lat, p.lng])}
                 pathOptions={{
                   color,
-                  weight: isSelected ? 7 : 3,
-                  opacity: isSelected ? 0.92 : 0.22,
-                  dashArray: isSelected ? null : '8 5',
+                  weight: isSelected ? 8 : 4,
+                  opacity: isSelected ? 1 : 0.45,
+                  dashArray: isSelected ? null : '10 6',
                   lineCap: 'round',
                   lineJoin: 'round',
                 }}

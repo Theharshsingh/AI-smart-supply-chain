@@ -1,6 +1,6 @@
 import { Clock, MapPin, Navigation, Zap, Ruler } from 'lucide-react';
 
-export const ROUTE_COLORS = ['#3b82f6', '#a78bfa', '#22c55e', '#f59e0b'];
+export const ROUTE_COLORS = ['#1d4ed8', '#dc2626', '#15803d', '#b45309'];
 
 function fmtDuration(min) {
   if (min < 60) return `${min} min`;
