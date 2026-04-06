@@ -116,6 +116,60 @@ export async function fetchOSRMRoute(from, to) {
   }
 }
 
+// ── Via-name generator: picks 2 representative road names from OSRM steps ─────
+function generateViaName(steps) {
+  const names = steps
+    .map(s => s.name)
+    .filter(n => n && n.length > 2 && !/^[\d\s\-]+$/.test(n));
+
+  const seen = new Set();
+  const unique = [];
+  for (const n of names) {
+    if (!seen.has(n)) { seen.add(n); unique.push(n); }
+  }
+
+  if (unique.length === 0) return 'main road';
+  if (unique.length === 1) return unique[0];
+
+  const first = unique[0];
+  const mid = unique[Math.floor(unique.length / 2)];
+  return mid !== first ? `${first}, ${mid}` : first;
+}
+
+// OSRM multi-route fetch with alternatives (for route selection panel)
+export async function fetchOSRMRoutes(from, to) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true&alternatives=true`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes?.length) return null;
+
+    return data.routes.map((route, idx) => {
+      const leg = route.legs[0];
+      const steps = (leg?.steps || []).map((step) => ({
+        instruction: formatOSRMInstruction(step),
+        distance: Math.round(step.distance),
+        duration: Math.round(step.duration),
+        maneuverType: step.maneuver.type,
+        maneuverModifier: step.maneuver.modifier || 'straight',
+        location: step.maneuver.location,
+        streetName: step.name || '',
+      }));
+
+      return {
+        polyline: route.geometry.coordinates.map(([lon, lat]) => ({ lat, lng: lon })),
+        distanceKm: (route.distance / 1000).toFixed(1),
+        durationMin: Math.round(route.duration / 60),
+        steps,
+        viaName: generateViaName(leg?.steps || []),
+        routeIndex: idx,
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function triggerRefresh() {
   const res = await fetch(`${API_URL}/api/refresh`, { method: 'POST' });
   return res.json();

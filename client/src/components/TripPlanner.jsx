@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { planRoute, fetchAutocomplete, fetchOSRMRoute } from '../api';
+import { planRoute, fetchAutocomplete, fetchOSRMRoute, fetchOSRMRoutes } from '../api';
+import RouteSelector from './RouteSelector';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { riskColor, modeIcon, weatherIcon, weatherColor, fmtEta } from '../utils';
 import { useNavigation } from '../hooks/useNavigation';
@@ -255,7 +256,8 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult]   = useState(null);
   const [selectedRoute, setSelectedRoute] = useState(null);
-  const [osrmRoute, setOsrmRoute] = useState(null);
+  const [osrmRoutes, setOsrmRoutes] = useState(null);   // array of route alternatives
+  const [selectedRouteIdx, setSelectedRouteIdx] = useState(0);
   const [osrmLoading, setOsrmLoading] = useState(false);
 
   const {
@@ -293,7 +295,8 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
     let cancelled = false;
 
     if (!from.lat || !to.lat) {
-      setOsrmRoute(null);
+      setOsrmRoutes(null);
+      setSelectedRouteIdx(0);
       setResult(null);
       // Keep origin pin on map for "Use Current Location" UX
       onPlanResult?.(from.lat ? {
@@ -305,26 +308,44 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
     }
 
     setOsrmLoading(true);
-    fetchOSRMRoute(from, to).then(route => {
+    fetchOSRMRoutes(from, to).then(routes => {
       if (cancelled) return;
       setOsrmLoading(false);
-      setOsrmRoute(route);
-      if (route) {
+      setOsrmRoutes(routes);
+      setSelectedRouteIdx(0);
+      if (routes?.length) {
         onPlanResult?.({
           origin: { lat: from.lat, lng: from.lon, formattedAddress: from.text },
           destination: { lat: to.lat, lng: to.lon, formattedAddress: to.text },
-          directionsData: [{
-            polyline: route.polyline,
-            distanceKm: route.distanceKm,
-            durationMin: route.durationMin,
-            durationTrafficMin: route.durationMin,
-          }],
+          directionsData: routes.map(r => ({
+            polyline: r.polyline,
+            distanceKm: r.distanceKm,
+            durationMin: r.durationMin,
+            durationTrafficMin: r.durationMin,
+          })),
+          selectedRouteIdx: 0,
         });
       }
     });
 
     return () => { cancelled = true; };
   }, [from.lat, from.lon, to.lat, to.lon]);
+
+  // Re-propagate onPlanResult whenever the user picks a different route
+  useEffect(() => {
+    if (!osrmRoutes?.length || !from.lat || !to.lat) return;
+    onPlanResult?.({
+      origin: { lat: from.lat, lng: from.lon, formattedAddress: from.text },
+      destination: { lat: to.lat, lng: to.lon, formattedAddress: to.text },
+      directionsData: osrmRoutes.map(r => ({
+        polyline: r.polyline,
+        distanceKm: r.distanceKm,
+        durationMin: r.durationMin,
+        durationTrafficMin: r.durationMin,
+      })),
+      selectedRouteIdx,
+    });
+  }, [selectedRouteIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function validate() {
     const e = {};
@@ -433,29 +454,27 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
         </div>
       </div>
 
-      {/* ── OSRM quick summary (shown while both selected, before full AI plan) ── */}
-      {osrmRoute && !result && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div className="card2" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 22 }}>📏</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#60a5fa', marginTop: 4 }}>{osrmRoute.distanceKm} km</div>
-            <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Distance</div>
-          </div>
-          <div className="card2" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 22 }}>⏱️</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#22c55e', marginTop: 4 }}>{osrmRoute.durationMin} min</div>
-            <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Est. Duration</div>
-          </div>
-        </div>
-      )}
-      {osrmLoading && !osrmRoute && from.lat && to.lat && (
-        <div className="card2" style={{ textAlign: 'center', color: '#64748b', fontSize: 13 }}>
-          ⏳ Calculating route…
+      {/* ── Loading state ── */}
+      {osrmLoading && !osrmRoutes && from.lat && to.lat && (
+        <div className="card2" style={{ textAlign: 'center', color: '#64748b', fontSize: 13, padding: '20px 16px' }}>
+          <div className="spin-anim" style={{ fontSize: 20, display: 'inline-flex', marginBottom: 8 }}>⟳</div>
+          <div>Fetching route alternatives…</div>
         </div>
       )}
 
+      {/* ── Route Selector (Google Maps style) ── */}
+      {osrmRoutes?.length > 0 && !result && (
+        <RouteSelector
+          routes={osrmRoutes}
+          selectedIdx={selectedRouteIdx}
+          onSelect={setSelectedRouteIdx}
+          fromText={from.text}
+          toText={to.text}
+        />
+      )}
+
       {/* ── Start / Stop Navigation button ── */}
-      {osrmRoute && !result && (
+      {osrmRoutes?.length > 0 && !result && (
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           {!isNavigating ? (
             <button

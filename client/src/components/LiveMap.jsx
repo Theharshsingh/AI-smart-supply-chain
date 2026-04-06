@@ -549,16 +549,26 @@ export default function LiveMap({
             </Marker>
           )}
 
-          {/* OSRM / Directions polylines — color coded by traffic */}
+          {/* OSRM / Directions polylines — highlight selected, dim others */}
           {planResult.directionsData?.map((route, i) => {
-            const ratio = route.durationTrafficMin / Math.max(1, route.durationMin);
-            const color = ratio > 1.4 ? '#ef4444' : ratio > 1.15 ? '#f97316' : '#22c55e';
+            const ROUTE_COLORS = ['#3b82f6', '#a78bfa', '#22c55e', '#f59e0b'];
+            const selIdx = planResult.selectedRouteIdx ?? 0;
+            const isSelected = i === selIdx;
+            const color = ROUTE_COLORS[i] || '#64748b';
+            // Render non-selected routes first (lower z-index), selected last (on top)
             return (
               <Polyline key={i}
                 positions={route.polyline.map(p => [p.lat, p.lng])}
-                pathOptions={{ color, weight: i === 0 ? 6 : 3, opacity: i === 0 ? 0.9 : 0.45, dashArray: i === 0 ? null : '6 4' }}
+                pathOptions={{
+                  color,
+                  weight: isSelected ? 7 : 3,
+                  opacity: isSelected ? 0.92 : 0.22,
+                  dashArray: isSelected ? null : '8 5',
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
               >
-                {i === 0 && (
+                {isSelected && (
                   <Popup>
                     <div style={{ color: '#111', fontWeight: 600, fontSize: 13 }}>
                       🛣️ {route.distanceKm} km · {route.durationMin} min
