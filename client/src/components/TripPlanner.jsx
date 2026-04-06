@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { planRoute, fetchAutocomplete, fetchOSRMRoute, fetchOSRMRoutes } from '../api';
+import { planRoute, fetchAutocomplete, fetchOSRMRoute, fetchOSRMRoutes, fetchTollsAlongRoute } from '../api';
 import RouteSelector from './RouteSelector';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { riskColor, modeIcon, weatherIcon, weatherColor, fmtEta } from '../utils';
@@ -256,9 +256,10 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult]   = useState(null);
   const [selectedRoute, setSelectedRoute] = useState(null);
-  const [osrmRoutes, setOsrmRoutes] = useState(null);   // array of route alternatives
+  const [osrmRoutes, setOsrmRoutes] = useState(null);
   const [selectedRouteIdx, setSelectedRouteIdx] = useState(0);
   const [osrmLoading, setOsrmLoading] = useState(false);
+  const [tolls, setTolls] = useState([]);
 
   const {
     isNavigating, gpsPosition, gpsError, currentStepIndex,
@@ -324,6 +325,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
             durationTrafficMin: r.durationMin,
           })),
           selectedRouteIdx: 0,
+          tolls: [],
         });
       }
     });
@@ -331,20 +333,28 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
     return () => { cancelled = true; };
   }, [from.lat, from.lon, to.lat, to.lon]);
 
+  // Fetch tolls whenever selected route changes
+  useEffect(() => {
+    const polyline = osrmRoutes?.[selectedRouteIdx]?.polyline;
+    if (!polyline?.length) { setTolls([]); return; }
+    fetchTollsAlongRoute(polyline).then(setTolls);
+  }, [selectedRouteIdx, osrmRoutes]);
+
   // Re-propagate onPlanResult whenever the user picks a different route
   useEffect(() => {
     if (!osrmRoutes?.length || !from.lat || !to.lat) return;
     onPlanResult?.({
-      origin: { lat: from.lat, lng: from.lon, formattedAddress: from.text },
-      destination: { lat: to.lat, lng: to.lon, formattedAddress: to.text },
-      directionsData: osrmRoutes.map(r => ({
-        polyline: r.polyline,
-        distanceKm: r.distanceKm,
-        durationMin: r.durationMin,
-        durationTrafficMin: r.durationMin,
-      })),
-      selectedRouteIdx,
-    });
+          origin: { lat: from.lat, lng: from.lon, formattedAddress: from.text },
+          destination: { lat: to.lat, lng: to.lon, formattedAddress: to.text },
+          directionsData: osrmRoutes.map(r => ({
+            polyline: r.polyline,
+            distanceKm: r.distanceKm,
+            durationMin: r.durationMin,
+            durationTrafficMin: r.durationMin,
+          })),
+          selectedRouteIdx,
+          tolls,
+        });
   }, [selectedRouteIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function validate() {

@@ -503,12 +503,23 @@ function recenterUserIcon() {
   });
 }
 
+// Toll booth marker icon
+function tollIcon() {
+  return L.divIcon({
+    html: `<div style="width:30px;height:30px;background:#f59e0b;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid #92400e;box-shadow:0 2px 8px #00000066;">🛂</div>`,
+    className: '',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  });
+}
+
 export default function LiveMap({
   shipments, selected, onSelect, planResult,
   gpsPosition, isNavigating, liveRoute,
   currentStepIndex, distToNextTurn, isRerouting, gpsError, onStopNavigation,
 }) {
   const [recenterLocation, setRecenterLocation] = useState(null);
+  const tolls = planResult?.tolls || [];
 
   // Split live route into completed (grey) + remaining (cyan) based on nearest GPS point
   const routeProgress = useMemo(() => {
