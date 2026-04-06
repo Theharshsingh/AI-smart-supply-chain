@@ -1,5 +1,15 @@
-import { useState } from 'react';
-import { Trash2, Eye, Square, MapPin, Clock, CheckCircle, XCircle, Loader } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Trash2, Eye, Square, MapPin, Clock, CheckCircle, XCircle, Loader, Navigation } from 'lucide-react';
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function fmtTime(iso) {
   if (!iso) return '—';
@@ -14,11 +24,16 @@ function fmtDuration(start, end) {
   return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
+function fmtDist(m) {
+  if (m == null) return null;
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`;
+}
+
 function StatusBadge({ status }) {
   const map = {
-    ongoing:   { bg: '#052e16', color: '#4ade80', border: '#166534', icon: <Loader size={10} />,       label: 'Ongoing' },
-    completed: { bg: '#0c1a3a', color: '#60a5fa', border: '#1e40af', icon: <CheckCircle size={10} />,  label: '✅ Delivered' },
-    cancelled: { bg: '#450a0a', color: '#f87171', border: '#991b1b', icon: <XCircle size={10} />,      label: 'Cancelled' },
+    ongoing:   { bg: '#052e16', color: '#4ade80', border: '#166534', icon: <Loader size={10} />,      label: 'Ongoing' },
+    completed: { bg: '#0c1a3a', color: '#60a5fa', border: '#1e40af', icon: <CheckCircle size={10} />, label: '✅ Delivered' },
+    cancelled: { bg: '#450a0a', color: '#f87171', border: '#991b1b', icon: <XCircle size={10} />,     label: 'Cancelled' },
   };
   const s = map[status] || map.cancelled;
   return (
@@ -32,6 +47,37 @@ function StatusBadge({ status }) {
   );
 }
 
+// ── Per-shipment GPS tracker ──────────────────────────────────────────────────
+function useGpsDistance(toLat, toLon, active) {
+  const [distM, setDistM] = useState(null);
+  const [gpsError, setGpsError] = useState(null);
+  const watchRef = useRef(null);
+
+  useEffect(() => {
+    if (!active || !toLat || !toLon || !navigator.geolocation) return;
+
+    watchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const d = haversine(pos.coords.latitude, pos.coords.longitude, toLat, toLon);
+        setDistM(Math.round(d));
+        setGpsError(null);
+      },
+      (err) => setGpsError(err.message),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
+
+    return () => {
+      if (watchRef.current != null) {
+        navigator.geolocation.clearWatch(watchRef.current);
+        watchRef.current = null;
+      }
+    };
+  }, [active, toLat, toLon]);
+
+  return { distM, gpsError };
+}
+
+// ── Detail Modal ──────────────────────────────────────────────────────────────
 function DetailModal({ shipment, onClose }) {
   if (!shipment) return null;
   return (
@@ -48,21 +94,19 @@ function DetailModal({ shipment, onClose }) {
           <div style={{ fontWeight: 800, fontSize: 15, color: '#f1f5f9' }}>📦 Shipment Details</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 18 }}>✕</button>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: '#0a0e1a', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' }}>Route</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 14 }}>🟢</span>
-              <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 600, flex: 1 }}>{shipment.from}</span>
+              <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 600 }}>{shipment.from}</span>
             </div>
             <div style={{ width: 2, height: 16, background: '#1e2d45', margin: '4px 0 4px 7px' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 14 }}>🔴</span>
-              <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 600, flex: 1 }}>{shipment.to}</span>
+              <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 600 }}>{shipment.to}</span>
             </div>
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {[
               { label: 'Status',    value: <StatusBadge status={shipment.status} /> },
@@ -78,20 +122,153 @@ function DetailModal({ shipment, onClose }) {
               </div>
             ))}
           </div>
-
-          {shipment.routeIdx != null && (
-            <div style={{ background: '#0a0e1a', borderRadius: 8, padding: '10px 12px' }}>
-              <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>Selected Route</div>
-              <div style={{ fontSize: 12, color: '#f59e0b', fontWeight: 600 }}>Route {shipment.routeIdx + 1}</div>
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-export default function ShipmentDashboard({ history, onStop, onDelete }) {
+// ── Single shipment card with live GPS tracking ───────────────────────────────
+function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail }) {
+  const isOngoing = s.status === 'ongoing';
+  const { distM, gpsError } = useGpsDistance(s.toLat, s.toLon, isOngoing);
+  const nearDest = distM != null && distM <= 500;
+
+  return (
+    <div className="card" style={{ padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+
+        {/* Route info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <StatusBadge status={s.status} />
+            {s.distanceKm && (
+              <span style={{ fontSize: 10, color: '#475569', background: '#1a2235', padding: '2px 7px', borderRadius: 4 }}>
+                {s.distanceKm} km
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+            <MapPin size={11} color="#22c55e" />
+            <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {s.from?.split(',')[0]}
+            </span>
+          </div>
+          <div style={{ width: 2, height: 10, background: '#1e2d45', margin: '0 0 3px 5px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MapPin size={11} color="#ef4444" />
+            <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {s.to?.split(',')[0]}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Clock size={10} color="#475569" />
+              <span style={{ fontSize: 10, color: '#64748b' }}>{fmtTime(s.startTime)}</span>
+            </div>
+            <span style={{ fontSize: 10, color: '#334155' }}>
+              Duration: {fmtDuration(s.startTime, s.endTime)}
+            </span>
+          </div>
+
+          {/* Live distance to destination */}
+          {isOngoing && (
+            <div style={{ marginTop: 8 }}>
+              {gpsError ? (
+                <span style={{ fontSize: 10, color: '#f87171', background: '#450a0a', border: '1px solid #991b1b', borderRadius: 4, padding: '2px 8px' }}>
+                  📡 GPS Error
+                </span>
+              ) : distM == null ? (
+                <span style={{ fontSize: 10, color: '#f59e0b', background: '#422006', border: '1px solid #92400e', borderRadius: 4, padding: '2px 8px' }}>
+                  📡 Acquiring GPS…
+                </span>
+              ) : (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
+                  background: nearDest ? '#052e16' : '#0a0e1a',
+                  color: nearDest ? '#4ade80' : '#60a5fa',
+                  border: `1px solid ${nearDest ? '#166534' : '#1e40af'}`,
+                }}>
+                  📍 {fmtDist(distM)} to destination {nearDest ? '✅ Near!' : ''}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+          <button
+            onClick={() => onViewDetail(s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: '#0c1a3a', border: '1px solid #1e40af',
+              borderRadius: 6, padding: '5px 10px', color: '#60a5fa',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <Eye size={12} /> Details
+          </button>
+
+          {/* Reached Location button — enabled only within 500m */}
+          {isOngoing && (
+            <button
+              onClick={() => nearDest && onComplete(s.id)}
+              disabled={!nearDest}
+              title={nearDest ? 'Mark as delivered' : `Get within 500m of destination (currently ${fmtDist(distM) || 'locating…'})`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: nearDest ? 'linear-gradient(135deg,#15803d,#166534)' : '#1a2235',
+                border: `1px solid ${nearDest ? '#22c55e' : '#334155'}`,
+                borderRadius: 6, padding: '5px 10px',
+                color: nearDest ? '#fff' : '#475569',
+                fontSize: 11, fontWeight: 700,
+                cursor: nearDest ? 'pointer' : 'not-allowed',
+                opacity: nearDest ? 1 : 0.6,
+                boxShadow: nearDest ? '0 0 12px #22c55e44' : 'none',
+                transition: 'all 0.3s',
+              }}
+            >
+              <Navigation size={12} />
+              {nearDest ? '✅ Reached!' : 'Reached Location'}
+            </button>
+          )}
+
+          {isOngoing && (
+            <button
+              onClick={() => onStop(s.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: '#422006', border: '1px solid #92400e',
+                borderRadius: 6, padding: '5px 10px', color: '#fb923c',
+                fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              <Square size={11} fill="#fb923c" /> Stop
+            </button>
+          )}
+
+          <button
+            onClick={() => onDelete(s.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: '#450a0a', border: '1px solid #991b1b',
+              borderRadius: 6, padding: '5px 10px', color: '#f87171',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Dashboard ────────────────────────────────────────────────────────────
+export default function ShipmentDashboard({ history, onStop, onDelete, onComplete }) {
   const [detail, setDetail] = useState(null);
   const [filter, setFilter] = useState('all');
 
@@ -107,13 +284,13 @@ export default function ShipmentDashboard({ history, onStop, onDelete }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <DetailModal shipment={detail} onClose={() => setDetail(null)} />
 
-      {/* ── Header + filter tabs ── */}
+      {/* Header + filters */}
       <div className="card" style={{ padding: '14px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ fontWeight: 800, fontSize: 15, color: '#f1f5f9' }}>📦 My Shipments</div>
           <span style={{ fontSize: 11, color: '#475569' }}>{history.length} total</span>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[
             { key: 'all',       label: 'All',       color: '#60a5fa' },
             { key: 'ongoing',   label: 'Ongoing',   color: '#4ade80' },
@@ -132,7 +309,6 @@ export default function ShipmentDashboard({ history, onStop, onDelete }) {
         </div>
       </div>
 
-      {/* ── Shipment list ── */}
       {filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
           <div style={{ fontSize: 36, marginBottom: 10 }}>📭</div>
@@ -141,90 +317,14 @@ export default function ShipmentDashboard({ history, onStop, onDelete }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(s => (
-            <div key={s.id} className="card" style={{ padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-
-                {/* Route info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <StatusBadge status={s.status} />
-                    {s.distanceKm && (
-                      <span style={{ fontSize: 10, color: '#475569', background: '#1a2235', padding: '2px 7px', borderRadius: 4 }}>
-                        {s.distanceKm} km
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                    <MapPin size={11} color="#22c55e" />
-                    <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.from?.split(',')[0]}
-                    </span>
-                  </div>
-                  <div style={{ width: 2, height: 10, background: '#1e2d45', margin: '0 0 3px 5px' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <MapPin size={11} color="#ef4444" />
-                    <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.to?.split(',')[0]}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Clock size={10} color="#475569" />
-                      <span style={{ fontSize: 10, color: '#64748b' }}>{fmtTime(s.startTime)}</span>
-                    </div>
-                    <span style={{ fontSize: 10, color: '#334155' }}>
-                      Duration: {fmtDuration(s.startTime, s.endTime)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                  <button
-                    onClick={() => setDetail(s)}
-                    title="View details"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      background: '#0c1a3a', border: '1px solid #1e40af',
-                      borderRadius: 6, padding: '5px 10px', color: '#60a5fa',
-                      fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                    }}
-                  >
-                    <Eye size={12} /> Details
-                  </button>
-
-                  {s.status === 'ongoing' && (
-                    <button
-                      onClick={() => onStop(s.id)}
-                      title="Stop shipment"
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 5,
-                        background: '#422006', border: '1px solid #92400e',
-                        borderRadius: 6, padding: '5px 10px', color: '#fb923c',
-                        fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                      }}
-                    >
-                      <Square size={11} fill="#fb923c" /> Stop
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => onDelete(s.id)}
-                    title="Delete shipment"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      background: '#450a0a', border: '1px solid #991b1b',
-                      borderRadius: 6, padding: '5px 10px', color: '#f87171',
-                      fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                    }}
-                  >
-                    <Trash2 size={12} /> Delete
-                  </button>
-                </div>
-              </div>
-            </div>
+            <ShipmentCard
+              key={s.id}
+              s={s}
+              onStop={onStop}
+              onDelete={onDelete}
+              onComplete={onComplete}
+              onViewDetail={setDetail}
+            />
           ))}
         </div>
       )}

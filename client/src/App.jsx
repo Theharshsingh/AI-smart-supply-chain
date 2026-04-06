@@ -186,6 +186,7 @@ export default function App() {
             history={history}
             onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
             onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
+            onComplete={id => { completeShipment(id); toast.success('🏁 Delivery Successful!', { icon: '✅', duration: 4000 }); }}
           />
         )}
 
