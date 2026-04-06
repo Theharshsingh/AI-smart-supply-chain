@@ -20,8 +20,9 @@ function haversine(lat1, lon1, lat2, lon2) {
  * @param {{ lat: number, lon: number } | null} from  – starting coord
  * @param {{ lat: number, lon: number } | null} to    – destination coord
  * @param {{ polyline, steps, distanceKm, durationMin } | null} selectedRoute – locked route to navigate
+ * @param {() => void} onArrived – called when driver is within 500m of destination
  */
-export function useNavigation(from, to, selectedRoute = null) {
+export function useNavigation(from, to, selectedRoute = null, onArrived = null) {
   const [isNavigating, setIsNavigating]       = useState(false);
   const [gpsPosition, setGpsPosition]         = useState(null);   // { lat, lng, accuracy }
   const [gpsError, setGpsError]               = useState(null);
@@ -32,8 +33,11 @@ export function useNavigation(from, to, selectedRoute = null) {
 
   const watchIdRef          = useRef(null);
   const lastReroutePosRef   = useRef(null);
-  const liveRouteRef        = useRef(null);   // mirrors state for closure access
+  const liveRouteRef        = useRef(null);
   const currentStepIdxRef   = useRef(0);
+  const arrivedRef          = useRef(false);  // prevent multiple onArrived calls
+  const onArrivedRef        = useRef(onArrived);
+  useEffect(() => { onArrivedRef.current = onArrived; }, [onArrived]);
 
   // keep refs in sync
   useEffect(() => { liveRouteRef.current = liveRoute; }, [liveRoute]);
@@ -53,6 +57,7 @@ export function useNavigation(from, to, selectedRoute = null) {
     setCurrentStepIndex(0);
     setGpsError(null);
     setIsRerouting(false);
+    arrivedRef.current = false;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -121,6 +126,15 @@ export function useNavigation(from, to, selectedRoute = null) {
     if (steps[idx]?.location) {
       const [sLon, sLat] = steps[idx].location;
       setDistToNextTurn(Math.round(haversine(gpsPosition.lat, gpsPosition.lng, sLat, sLon)));
+    }
+
+    // ── Geofencing: auto-complete when within 500m of destination ──
+    if (!arrivedRef.current && to?.lat && to?.lon) {
+      const distToDest = haversine(gpsPosition.lat, gpsPosition.lng, to.lat, to.lon ?? to.lng);
+      if (distToDest <= 500) {
+        arrivedRef.current = true;
+        onArrivedRef.current?.();
+      }
     }
 
     // Reroute if user has drifted 200 m — disabled when locked to a selected route

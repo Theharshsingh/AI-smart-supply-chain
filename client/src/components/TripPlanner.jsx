@@ -6,7 +6,7 @@ import { riskColor, modeIcon, weatherIcon, weatherColor, fmtEta } from '../utils
 import { useNavigation } from '../hooks/useNavigation';
 import NavigationPanel from './NavigationPanel';
 import toast from 'react-hot-toast';
-import { Navigation2, Square } from 'lucide-react';
+import { Navigation2, Square, Package } from 'lucide-react';
 
 // ── Autocomplete Input ────────────────────────────────────────────────────────
 function PlaceInput({ label, icon, value, onChange, onSelect, error }) {
@@ -249,7 +249,7 @@ function RouteCard({ route, selected, onSelect }) {
 }
 
 // ── Main TripPlanner ──────────────────────────────────────────────────────────
-export default function TripPlanner({ onPlanResult, onNavStateChange }) {
+export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShipment, onShipmentArrived }) {
   const [from, setFrom]   = useState({ text: '', placeId: null, lat: null, lon: null });
   const [to, setTo]       = useState({ text: '', placeId: null, lat: null, lon: null });
   const [errors, setErrors] = useState({});
@@ -260,11 +260,19 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
   const [selectedRouteIdx, setSelectedRouteIdx] = useState(0);
   const [osrmLoading, setOsrmLoading] = useState(false);
   const [tolls, setTolls] = useState([]);
+  const [activeShipmentId, setActiveShipmentId] = useState(null);
+
+  const handleArrived = useCallback(() => {
+    if (activeShipmentId) {
+      onShipmentArrived?.(activeShipmentId);
+      setActiveShipmentId(null);
+    }
+  }, [activeShipmentId, onShipmentArrived]);
 
   const {
     isNavigating, gpsPosition, gpsError, currentStepIndex,
     liveRoute, isRerouting, distToNextTurn, startNavigation, stopNavigation,
-  } = useNavigation(from, to, osrmRoutes?.[selectedRouteIdx] ?? null);
+  } = useNavigation(from, to, osrmRoutes?.[selectedRouteIdx] ?? null, handleArrived);
 
   const { fetchLocation, isLoading: geoLoading } = useCurrentLocation();
 
@@ -485,7 +493,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
 
       {/* ── Start / Stop Navigation button ── */}
       {osrmRoutes?.length > 0 && !result && (
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {!isNavigating ? (
             <button
               onClick={startNavigation}
@@ -502,19 +510,47 @@ export default function TripPlanner({ onPlanResult, onNavStateChange }) {
               Start Navigation
             </button>
           ) : (
-            <button
-              onClick={stopNavigation}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: '#450a0a', border: '1px solid #991b1b',
-                borderRadius: 10, padding: '11px 28px',
-                color: '#f87171', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                width: '100%', justifyContent: 'center',
-              }}
-            >
-              <Square size={14} fill="#f87171" />
-              Stop Navigation
-            </button>
+            <>
+              <button
+                onClick={stopNavigation}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: '#450a0a', border: '1px solid #991b1b',
+                  borderRadius: 10, padding: '11px 28px',
+                  color: '#f87171', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  width: '100%', justifyContent: 'center',
+                }}
+              >
+                <Square size={14} fill="#f87171" />
+                Stop Navigation
+              </button>
+              <button
+                onClick={() => {
+                  const shipmentData = {
+                    from: from.text,
+                    to: to.text,
+                    toLat: to.lat,
+                    toLon: to.lon,
+                    distanceKm: osrmRoutes?.[selectedRouteIdx]?.distanceKm,
+                    durationMin: osrmRoutes?.[selectedRouteIdx]?.durationMin,
+                    routeIdx: selectedRouteIdx,
+                  };
+                  const id = onStartShipment?.(shipmentData);
+                  if (id) setActiveShipmentId(id);
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                  border: 'none', borderRadius: 10, padding: '11px 28px',
+                  color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  boxShadow: '0 0 18px #3b82f644',
+                  width: '100%', justifyContent: 'center',
+                }}
+              >
+                <Package size={16} />
+                Start Shipment
+              </button>
+            </>
           )}
         </div>
       )}

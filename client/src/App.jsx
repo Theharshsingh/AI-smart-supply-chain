@@ -9,11 +9,14 @@ import InsightsPanel from './components/InsightsPanel';
 import LiveDataPanel from './components/LiveDataPanel';
 import RiskChart from './components/RiskChart';
 import TripPlanner from './components/TripPlanner';
+import ShipmentDashboard from './components/ShipmentDashboard';
+import { useShipmentHistory } from './hooks/useShipmentHistory';
 import { weatherIcon, weatherColor } from './utils';
+import toast from 'react-hot-toast';
 
 const TABS = [
   { id: 'plan',      label: 'Plan Route',  icon: '🗺️' },
-  { id: 'dashboard', label: 'Dashboard',   icon: '📦' },
+  { id: 'dashboard', label: 'My Shipments', icon: '📦' },
   { id: 'routes',    label: 'Routes',      icon: '🔀' },
   { id: 'insights',  label: 'Insights',    icon: '🧠' },
   { id: 'livedata',  label: 'Live Data',   icon: '🌐' },
@@ -39,6 +42,20 @@ export default function App() {
     currentStepIndex: 0, distToNextTurn: null, isRerouting: false,
     gpsError: null, onStopNavigation: null,
   });
+
+  const { history, addShipment, stopShipment, deleteShipment, completeShipment } = useShipmentHistory();
+
+  function handleStartShipment({ from, to, toLat, toLon, distanceKm, durationMin, routeIdx }) {
+    const id = `SHP-${Date.now()}`;
+    addShipment({ id, from, to, toLat, toLon, distanceKm, durationMin, routeIdx, status: 'ongoing', startTime: new Date().toISOString(), endTime: null });
+    toast.success('Shipment started! Track it in My Shipments.', { icon: '📦' });
+    return id;  // return id so TripPlanner can store it for geofencing
+  }
+
+  function handleShipmentArrived(id) {
+    completeShipment(id);
+    toast.success('🏁 Delivery Successful! Shipment completed.', { duration: 5000, icon: '✅' });
+  }
 
   const onTime      = shipments.filter(s => s.status === 'On-time').length;
   const atRisk      = shipments.filter(s => s.status === 'Risk').length;
@@ -104,17 +121,25 @@ export default function App() {
 
       {/* ── Nav ── */}
       <div style={{ background: '#111827', borderBottom: '1px solid #1e2d45', padding: '0 24px', display: 'flex', gap: 2 }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '10px 16px', fontSize: 13, fontWeight: 600,
-            color: tab === t.id ? '#60a5fa' : '#64748b',
-            borderBottom: tab === t.id ? '2px solid #3b82f6' : '2px solid transparent',
-            transition: 'all 0.2s',
-          }}>
-            {t.icon} {t.label}
-          </button>
-        ))}
+        {TABS.map(t => {
+          const ongoingCount = t.id === 'dashboard' ? history.filter(s => s.status === 'ongoing').length : 0;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '10px 16px', fontSize: 13, fontWeight: 600,
+              color: tab === t.id ? '#60a5fa' : '#64748b',
+              borderBottom: tab === t.id ? '2px solid #3b82f6' : '2px solid transparent',
+              transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              {t.icon} {t.label}
+              {ongoingCount > 0 && (
+                <span style={{ background: '#22c55e', color: '#fff', borderRadius: 999, fontSize: 9, fontWeight: 800, padding: '1px 6px', lineHeight: 1.6 }}>
+                  {ongoingCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Content ── */}
@@ -131,10 +156,9 @@ export default function App() {
           {alerts?.length > 0 && <StatCard label="Live Alerts" value={alerts.length} color="#f87171" sub="Real-time" />}
         </div>
 
-        {/* ── Plan Route tab ── */}
-        {tab === 'plan' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 16, alignItems: 'start' }}>
-            <TripPlanner onPlanResult={setPlanResult} onNavStateChange={setNavState} />
+        {/* ── Plan Route tab ── always mounted, hidden when not active to preserve state ── */}
+        <div style={{ display: tab === 'plan' ? 'grid' : 'none', gridTemplateColumns: '1fr 420px', gap: 16, alignItems: 'start' }}>
+            <TripPlanner onPlanResult={setPlanResult} onNavStateChange={setNavState} onStartShipment={handleStartShipment} onShipmentArrived={handleShipmentArrived} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ height: 380 }}>
               <LiveMap
@@ -155,25 +179,14 @@ export default function App() {
               <AlertsPanel env={env} alerts={alerts} shipments={shipments} />
             </div>
           </div>
-        )}
 
         {/* ── Dashboard tab ── */}
         {tab === 'dashboard' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, alignItems: 'start' }}>
-            <div className="card" style={{ padding: '10px 14px' }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>📦 Active Shipments</div>
-              <ShipmentList shipments={shipments} selected={selected} onSelect={setSelected} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ height: 420 }}>
-                <LiveMap shipments={shipments} selected={selected} onSelect={setSelected} planResult={null} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <RiskChart shipments={shipments} />
-                <AlertsPanel env={env} alerts={alerts} shipments={shipments} />
-              </div>
-            </div>
-          </div>
+          <ShipmentDashboard
+            history={history}
+            onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
+            onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
+          />
         )}
 
         {/* ── Routes tab ── */}
