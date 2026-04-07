@@ -55,7 +55,7 @@ export default function App() {
   const [navState, setNavState]   = useState({
     gpsPosition: null, isNavigating: false, liveRoute: null,
     currentStepIndex: 0, distToNextTurn: null, isRerouting: false,
-    gpsError: null, onStopNavigation: null,
+    gpsError: null, onStopNavigation: null, speed: 0,
   });
 
   const { history, addShipment, stopShipment, deleteShipment, completeShipment } = useShipmentHistory();
@@ -230,7 +230,7 @@ export default function App() {
                   weatherPoints={weatherPoints}
                 />
               </div>
-              <AlertsPanel env={env} alerts={alerts} shipments={shipments} />
+              <AlertsPanel env={env} alerts={alerts} shipments={shipments} speed={navState.speed} isNavigating={navState.isNavigating} />
             </div>
             <TripPlanner
               onPlanResult={setPlanResult}
@@ -277,7 +277,7 @@ export default function App() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <InsightsPanel shipment={selected} />
-                <AlertsPanel env={env} alerts={alerts} shipments={shipments} />
+                <AlertsPanel env={env} alerts={alerts} shipments={shipments} speed={0} isNavigating={false} />
               </div>
             </div>
           )}
@@ -287,7 +287,7 @@ export default function App() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 960 }}>
               <LiveDataPanel env={env} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <AlertsPanel env={env} alerts={alerts} shipments={shipments} />
+                <AlertsPanel env={env} alerts={alerts} shipments={shipments} speed={0} isNavigating={false} />
                 <RiskChart shipments={shipments} />
               </div>
             </div>

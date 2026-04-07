@@ -275,7 +275,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
 
   const {
     isNavigating, gpsPosition, gpsError, currentStepIndex,
-    liveRoute, isRerouting, distToNextTurn, startNavigation, stopNavigation,
+    liveRoute, isRerouting, distToNextTurn, speed, startNavigation, stopNavigation,
   } = useNavigation(from, to, osrmRoutes?.[selectedRouteIdx] ?? null, handleArrived);
 
   // ── Route weather monitoring ──────────────────────────────────────────────
@@ -317,6 +317,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
     onNavStateChange?.({
       gpsPosition, isNavigating, liveRoute,
       currentStepIndex, distToNextTurn, isRerouting, gpsError,
+      speed,
       onStopNavigation: stopNavigation,
     });
   }, [gpsPosition, isNavigating, liveRoute, currentStepIndex, distToNextTurn, isRerouting, gpsError]); // eslint-disable-line react-hooks/exhaustive-deps

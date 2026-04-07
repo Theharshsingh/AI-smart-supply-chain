@@ -30,13 +30,17 @@ export function useNavigation(from, to, selectedRoute = null, onArrived = null) 
   const [liveRoute, setLiveRoute]             = useState(null);   // { polyline, steps, … }
   const [isRerouting, setIsRerouting]         = useState(false);
   const [distToNextTurn, setDistToNextTurn]   = useState(null);   // metres to next maneuver
+  const [speed, setSpeed]                     = useState(0);      // km/h, smoothed
 
   const watchIdRef          = useRef(null);
   const lastReroutePosRef   = useRef(null);
   const liveRouteRef        = useRef(null);
   const currentStepIdxRef   = useRef(0);
-  const arrivedRef          = useRef(false);  // prevent multiple onArrived calls
+  const arrivedRef          = useRef(false);
   const onArrivedRef        = useRef(onArrived);
+  // Speed tracking refs
+  const prevPosRef          = useRef(null);   // { lat, lng, ts }
+  const speedBufRef         = useRef([]);     // last 4 raw km/h values for smoothing
   useEffect(() => { onArrivedRef.current = onArrived; }, [onArrived]);
 
   // keep refs in sync
@@ -61,11 +65,37 @@ export function useNavigation(from, to, selectedRoute = null, onArrived = null) 
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setGpsPosition({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: Math.round(pos.coords.accuracy),
-        });
+        const lat  = pos.coords.latitude;
+        const lng  = pos.coords.longitude;
+        const acc  = pos.coords.accuracy;
+        const ts   = pos.timestamp;
+
+        setGpsPosition({ lat, lng, accuracy: Math.round(acc) });
+
+        // ── Speed calculation ──────────────────────────────────────────
+        // Skip if accuracy is too poor (> 40 m)
+        if (acc <= 40 && prevPosRef.current) {
+          const dtSec = (ts - prevPosRef.current.ts) / 1000;
+          // Skip if time delta too small (< 0.8 s) to avoid division noise
+          if (dtSec >= 0.8) {
+            const distM = haversine(
+              prevPosRef.current.lat, prevPosRef.current.lng, lat, lng
+            );
+            const rawKmh = (distM / dtSec) * 3.6;
+            // Clamp unrealistic spikes (> 200 km/h for road vehicles)
+            const clampedKmh = rawKmh > 200 ? 0 : rawKmh;
+
+            // Rolling average over last 4 readings
+            const buf = speedBufRef.current;
+            buf.push(clampedKmh);
+            if (buf.length > 4) buf.shift();
+            const avg = buf.reduce((s, v) => s + v, 0) / buf.length;
+            setSpeed(Math.round(avg));
+          }
+        }
+        if (acc <= 40) {
+          prevPosRef.current = { lat, lng, ts };
+        }
       },
       (err) => setGpsError(err.message),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -85,6 +115,9 @@ export function useNavigation(from, to, selectedRoute = null, onArrived = null) 
     setGpsError(null);
     setIsRerouting(false);
     setDistToNextTurn(null);
+    setSpeed(0);
+    prevPosRef.current    = null;
+    speedBufRef.current   = [];
     lastReroutePosRef.current = null;
   }, []);
 
@@ -178,6 +211,7 @@ export function useNavigation(from, to, selectedRoute = null, onArrived = null) 
     liveRoute,
     isRerouting,
     distToNextTurn,
+    speed,
     startNavigation,
     stopNavigation,
   };

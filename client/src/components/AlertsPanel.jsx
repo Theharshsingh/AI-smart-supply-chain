@@ -11,9 +11,80 @@ function AlertItem({ alert }) {
   );
 }
 
-export default function AlertsPanel({ env, alerts, shipments = [] }) {
-  const trafficPct   = Math.round((env.traffic || 0) * 100);
-  const trafficColor = trafficPct > 70 ? 'var(--red)' : trafficPct > 50 ? 'var(--amber)' : 'var(--green)';
+// ── Speedometer ───────────────────────────────────────────────────────────────
+function Speedometer({ speed = 0, isNavigating = false }) {
+  const MAX = 120;
+  const pct = Math.min(speed / MAX, 1);
+
+  // Arc from -210deg to 30deg (240deg sweep), SVG arc
+  const cx = 52, cy = 52, r = 40;
+  const startAngle = -210;
+  const sweepDeg   = 240;
+  const endAngle   = startAngle + sweepDeg * pct;
+
+  function polar(angle, radius = r) {
+    const rad = (angle * Math.PI) / 180;
+    return {
+      x: cx + radius * Math.cos(rad),
+      y: cy + radius * Math.sin(rad),
+    };
+  }
+
+  const start = polar(startAngle);
+  const end   = polar(endAngle);
+  const large = sweepDeg * pct > 180 ? 1 : 0;
+
+  // Track arc (full)
+  const trackEnd = polar(startAngle + sweepDeg);
+  const trackPath = `M ${start.x} ${start.y} A ${r} ${r} 0 1 1 ${trackEnd.x} ${trackEnd.y}`;
+
+  // Fill arc (speed)
+  const fillPath = pct > 0
+    ? `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`
+    : null;
+
+  // Needle tip
+  const needleAngle = startAngle + sweepDeg * pct;
+  const needleTip   = polar(needleAngle, r - 6);
+
+  const speedColor = speed > 80 ? '#ef4444' : speed > 50 ? '#f59e0b' : '#22c55e';
+  const label = isNavigating ? `${speed} km/h` : '— km/h';
+  const statusLabel = !isNavigating
+    ? 'Start navigation'
+    : speed === 0 ? 'Stationary' : speed < 20 ? 'Slow' : speed < 60 ? 'Moving' : 'Fast';
+
+  return (
+    <div className="card2" style={{ textAlign: 'center', padding: '10px 8px' }}>
+      <svg viewBox="0 0 104 80" width="100%" style={{ maxWidth: 110, display: 'block', margin: '0 auto' }}>
+        {/* Track */}
+        <path d={trackPath} fill="none" stroke="var(--border)" strokeWidth="7" strokeLinecap="round" />
+        {/* Fill */}
+        {fillPath && (
+          <path d={fillPath} fill="none" stroke={speedColor} strokeWidth="7" strokeLinecap="round"
+            style={{ transition: 'stroke 0.4s, d 0.3s' }} />
+        )}
+        {/* Needle dot */}
+        <circle cx={needleTip.x} cy={needleTip.y} r="3.5" fill={speedColor}
+          style={{ transition: 'cx 0.3s, cy 0.3s, fill 0.4s' }} />
+        {/* Center dot */}
+        <circle cx={cx} cy={cy} r="4" fill="var(--tx-3)" />
+        {/* Speed value */}
+        <text x={cx} y={cy + 16} textAnchor="middle"
+          style={{ fontSize: 13, fontWeight: 800, fill: speedColor, fontFamily: 'Inter, sans-serif',
+            transition: 'fill 0.4s' }}>
+          {isNavigating ? speed : '—'}
+        </text>
+      </svg>
+      <div style={{ fontSize: 10, fontWeight: 700, color: speedColor, marginTop: 2,
+        transition: 'color 0.4s' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 9, color: 'var(--tx-3)', marginTop: 1 }}>{statusLabel}</div>
+    </div>
+  );
+}
+
+export default function AlertsPanel({ env, alerts, shipments = [], speed = 0, isNavigating = false }) {
   const autoSwitched = shipments.filter(s => s.autoSwitched && s.autoSwitchReason);
 
   return (
@@ -33,6 +104,7 @@ export default function AlertsPanel({ env, alerts, shipments = [] }) {
       <div className="divider" style={{ margin: '0' }} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {/* Weather card */}
         <div className="card2" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 26, marginBottom: 4 }}>{weatherIcon(env.weather)}</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: weatherColor(env.weather) }}>
@@ -44,16 +116,8 @@ export default function AlertsPanel({ env, alerts, shipments = [] }) {
           <div style={{ fontSize: 10, color: 'var(--tx-3)', marginTop: 2 }}>Weather</div>
         </div>
 
-        <div className="card2" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: trafficColor, marginBottom: 4 }}>{trafficPct}%</div>
-          <div style={{ fontSize: 10, color: 'var(--tx-3)', marginBottom: 6 }}>Traffic Load</div>
-          <div className="risk-bar-track">
-            <div className="risk-bar-fill" style={{ width: `${trafficPct}%`, background: trafficColor }} />
-          </div>
-          <div style={{ fontSize: 10, color: 'var(--tx-3)', marginTop: 4 }}>
-            {env.apiStatus?.traffic === 'google' ? '📡 Google Maps' : '⏱ Heuristic'}
-          </div>
-        </div>
+        {/* Speedometer replaces traffic */}
+        <Speedometer speed={speed} isNavigating={isNavigating} />
       </div>
 
       {autoSwitched.length > 0 && (
