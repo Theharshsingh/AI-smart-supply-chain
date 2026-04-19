@@ -141,14 +141,17 @@ export default function App() {
     toast.success('🏁 Delivery Successful! Shipment completed.', { duration: 5000, icon: '✅' });
   }
 
-  const onTime       = history.filter(s => s.status === 'completed').length;
-  const atRisk       = history.filter(s => s.status === 'ongoing').length;
-  const delayed      = history.filter(s => s.status === 'cancelled').length;
-  const avgRisk      = 0; // not applicable for user shipments
+  // ── KPI — admin uses driverShipments, driver uses own history ──────────────
+  const kpiSource    = user.role === 'admin' ? driverShipments : history;
+  const onTime       = kpiSource.filter(s => s.status === 'completed').length;
+  const atRisk       = kpiSource.filter(s => s.status === 'ongoing').length;
+  const delayed      = kpiSource.filter(s => s.status === 'cancelled').length;
   const autoSwitched = shipments.filter(s => s.autoSwitched).length;
-  const onTimePct    = history.length ? Math.round(onTime / history.length * 100) : 0;
+  const onTimePct    = kpiSource.length ? Math.round(onTime / kpiSource.length * 100) : 0;
   const trafficPct   = Math.round((env.traffic || 0) * 100);
-  const ongoingCount = history.filter(s => s.status === 'ongoing').length;
+  const ongoingCount = user.role === 'admin'
+    ? driverShipments.filter(s => s.status === 'ongoing').length
+    : history.filter(s => s.status === 'ongoing').length;
 
   const hasRoute = !!(planResult?.origin && planResult?.destination);
 
@@ -156,13 +159,13 @@ export default function App() {
   const kpiCards = [
     {
       icon: '📦', iconBg: 'rgba(59,130,246,0.15)',
-      label: 'Total Shipments', value: history.length,
+      label: 'Total Orders', value: kpiSource.length,
       badge: `${ongoingCount} active`, badgeColor: '#60a5fa', badgeBg: 'rgba(59,130,246,0.12)',
     },
     {
       icon: '✅', iconBg: 'rgba(34,197,94,0.15)',
       label: 'Delivered', value: onTime,
-      badge: history.length ? `${onTimePct}%` : '—',
+      badge: kpiSource.length ? `${onTimePct}%` : '—',
       badgeColor: '#4ade80', badgeBg: 'rgba(34,197,94,0.12)',
       sub: 'successfully delivered',
     },
