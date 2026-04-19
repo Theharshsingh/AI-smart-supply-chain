@@ -4,6 +4,7 @@ const http    = require('http');
 const { Server } = require('socket.io');
 const cors   = require('cors');
 const cron   = require('node-cron');
+const { registerAuthRoutes, authMiddleware, adminOnly, seedDefaultUsers } = require('./auth');
 
 const { generateShipments, interpolate, advanceAlongPolyline, geocodePlace, getAutocompleteSuggestions } = require('./data');
 const { generateRoutes, calculateRisk, haversineKm } = require('./engine');
@@ -17,6 +18,10 @@ const io     = new Server(server, { cors: { origin: '*' } });
 
 app.use(cors());
 app.use(express.json());
+
+// ── Auth routes + seed default admin ─────────────────────────────────────────
+seedDefaultUsers();
+registerAuthRoutes(app);
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let shipments = generateShipments(6);

@@ -13,18 +13,22 @@ import RiskChart from './components/RiskChart';
 import TripPlanner from './components/TripPlanner';
 import ShipmentDashboard from './components/ShipmentDashboard';
 import TrackingPage from './components/TrackingPage';
+import LoginPage from './components/LoginPage';
+import DriversPage from './components/DriversPage';
 import { useShipmentHistory } from './hooks/useShipmentHistory';
+import { useAuth } from './hooks/useAuth';
 import { weatherIcon, weatherColor } from './utils';
 
 // ── If ?tracking= param present, export TrackingPage directly ──────────────
 const _isTracking = new URLSearchParams(window.location.search).get('tracking');
 
 const TABS = [
-  { id: 'plan',      label: 'Route Planner', icon: '🗺️' },
-  { id: 'dashboard', label: 'Shipments',     icon: '📦' },
-  { id: 'routes',    label: 'Routes',        icon: '🔀' },
-  { id: 'insights',  label: 'Insights',      icon: '🧠' },
-  { id: 'livedata',  label: 'Live Data',     icon: '🌐' },
+  { id: 'plan',      label: 'Route Planner', icon: '🗺️', roles: ['admin', 'driver'] },
+  { id: 'dashboard', label: 'Shipments',     icon: '📦', roles: ['admin', 'driver'] },
+  { id: 'drivers',   label: 'Drivers',       icon: '🚛', roles: ['admin'] },
+  { id: 'routes',    label: 'Routes',        icon: '🔀', roles: ['admin'] },
+  { id: 'insights',  label: 'Insights',      icon: '🧠', roles: ['admin'] },
+  { id: 'livedata',  label: 'Live Data',     icon: '🌐', roles: ['admin'] },
 ];
 
 // ── Detect mobile ─────────────────────────────────────────────────────────────
@@ -91,8 +95,22 @@ export default function App() {
   // ── Show public tracking page if ?tracking= param present ─────────────────────
   if (_isTracking) return <TrackingPage />;
 
+  const { user, loading: authLoading, logout } = useAuth();
+
+  // ── Show login if not authenticated ─────────────────────────────────────────
+  if (authLoading) return (
+    <div style={{ minHeight: '100vh', background: '#020817', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>🚀</div>
+        <div>Loading…</div>
+      </div>
+    </div>
+  );
+  if (!user) return <LoginPage />;
+
   const { shipments, env, alerts } = useSocket();
   const isMobile = useIsMobile();
+  const visibleTabs = TABS.filter(t => t.roles.includes(user.role));
 
   const [selected, setSelected]     = useState(null);
   const [tab, setTab]               = useState('plan');
@@ -217,7 +235,7 @@ export default function App() {
         </div>
         <nav className="sidebar-nav">
           <div className="nav-section">Navigation</div>
-          {TABS.map(t => (
+          {visibleTabs.map(t => (
             <button
               key={t.id}
               className={`nav-btn ${tab === t.id ? 'active' : ''}`}
@@ -234,12 +252,25 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-foot">
+          {/* User info */}
+          <div style={{ padding: '8px 12px', marginBottom: 6, borderRadius: 'var(--r-md)', background: 'var(--glass)', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx-1)' }}>{user.name}</div>
+            <div style={{ fontSize: 10, color: 'var(--tx-3)', marginTop: 1, textTransform: 'capitalize' }}>{user.role}</div>
+          </div>
           <div className="sys-status">
             <div className="live-dot" />
             <span style={{ fontSize: 11, color: 'var(--tx-2)', fontWeight: 500 }}>
               {env.apiStatus?.weather === 'live' ? 'Live APIs' : 'Heuristic Mode'}
             </span>
           </div>
+          <button onClick={logout} style={{
+            width: '100%', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+            borderRadius: 'var(--r-md)', padding: '7px 12px',
+            color: '#f87171', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}>
+            🚪 Sign Out
+          </button>
         </div>
       </aside>
 
@@ -360,6 +391,10 @@ export default function App() {
                       {kpiCards.map((k, i) => <KpiCard key={i} {...k} />)}
                     </div>
 
+                    {tab === 'drivers' && user.role === 'admin' && (
+                      <DriversPage />
+                    )}
+
                     {tab === 'dashboard' && (
                       <ShipmentDashboard
                         history={history}
@@ -408,7 +443,7 @@ export default function App() {
 
             {/* Mobile Bottom Nav */}
             <nav className="mobile-bottom-nav">
-              {TABS.map(t => (
+              {visibleTabs.map(t => (
                 <button
                   key={t.id}
                   className={`mobile-nav-btn ${tab === t.id ? 'active' : ''}`}
@@ -447,6 +482,13 @@ export default function App() {
               </div>
               {tripPlanner}
             </div>
+
+            {/* Drivers — admin only */}
+            {tab === 'drivers' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <DriversPage />
+              </motion.div>
+            )}
 
             {/* My Shipments */}
             {tab === 'dashboard' && (
