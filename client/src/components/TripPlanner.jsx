@@ -564,6 +564,8 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
                   const shipmentData = {
                     from: from.text,
                     to: to.text,
+                    fromLat: from.lat,
+                    fromLon: from.lon,
                     toLat: to.lat,
                     toLon: to.lon,
                     distanceKm: osrmRoutes?.[selectedRouteIdx]?.distanceKm,

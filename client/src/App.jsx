@@ -110,9 +110,9 @@ export default function App() {
 
   const { history, addShipment, stopShipment, deleteShipment, completeShipment } = useShipmentHistory();
 
-  function handleStartShipment({ from, to, toLat, toLon, distanceKm, durationMin, routeIdx }) {
+  function handleStartShipment({ from, to, toLat, toLon, fromLat, fromLon, distanceKm, durationMin, routeIdx }) {
     const id = `SHP-${Date.now()}`;
-    addShipment({ id, from, to, toLat, toLon, distanceKm, durationMin, routeIdx, status: 'ongoing', startTime: new Date().toISOString(), endTime: null });
+    addShipment({ id, from, to, fromLat, fromLon, toLat, toLon, distanceKm, durationMin, routeIdx, status: 'ongoing', startTime: new Date().toISOString(), endTime: null });
     toast.success('Shipment started! Track it in My Shipments.', { icon: '📦' });
     return id;
   }

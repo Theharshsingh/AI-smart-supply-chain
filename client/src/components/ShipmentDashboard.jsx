@@ -89,6 +89,8 @@ function QRModal({ shipment, onClose }) {
       id: shipment.id,
       from: shipment.from,
       to: shipment.to,
+      fromLat: shipment.fromLat,
+      fromLon: shipment.fromLon,
       toLat: shipment.toLat,
       toLon: shipment.toLon,
       distanceKm: shipment.distanceKm,
