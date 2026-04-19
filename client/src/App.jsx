@@ -122,24 +122,45 @@ export default function App() {
     toast.success('🏁 Delivery Successful! Shipment completed.', { duration: 5000, icon: '✅' });
   }
 
-  const onTime       = shipments.filter(s => s.status === 'On-time').length;
-  const atRisk       = shipments.filter(s => s.status === 'Risk').length;
-  const delayed      = shipments.filter(s => s.status === 'Delayed').length;
-  const avgRisk      = shipments.length ? Math.round(shipments.reduce((a, s) => a + s.riskScore, 0) / shipments.length) : 0;
+  const onTime       = history.filter(s => s.status === 'completed').length;
+  const atRisk       = history.filter(s => s.status === 'ongoing').length;
+  const delayed      = history.filter(s => s.status === 'cancelled').length;
+  const avgRisk      = 0; // not applicable for user shipments
   const autoSwitched = shipments.filter(s => s.autoSwitched).length;
-  const onTimePct    = shipments.length ? Math.round(onTime / shipments.length * 100) : 0;
+  const onTimePct    = history.length ? Math.round(onTime / history.length * 100) : 0;
   const trafficPct   = Math.round((env.traffic || 0) * 100);
   const ongoingCount = history.filter(s => s.status === 'ongoing').length;
 
   const hasRoute = !!(planResult?.origin && planResult?.destination);
 
-  // ── KPI cards data ────────────────────────────────────────────────────────
+  // ── KPI cards data — based on user's actual shipment history ─────────────
   const kpiCards = [
-    { icon: '📦', iconBg: 'rgba(59,130,246,0.15)', label: 'Total Shipments', value: shipments.length, badge: `${shipments.length} active`, badgeColor: '#60a5fa', badgeBg: 'rgba(59,130,246,0.12)' },
-    { icon: '✅', iconBg: 'rgba(34,197,94,0.15)', label: 'On-Time', value: onTime, badge: `${onTimePct}%`, badgeColor: '#4ade80', badgeBg: 'rgba(34,197,94,0.12)', sub: 'of total fleet' },
-    { icon: '⚠️', iconBg: 'rgba(245,158,11,0.15)', label: 'At Risk', value: atRisk, badge: atRisk > 0 ? 'Attention' : 'Clear', badgeColor: atRisk > 0 ? '#fcd34d' : '#4ade80', badgeBg: atRisk > 0 ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)' },
-    { icon: '🚨', iconBg: 'rgba(239,68,68,0.15)', label: 'Delayed', value: delayed, badge: delayed > 0 ? 'Action needed' : 'None', badgeColor: delayed > 0 ? '#f87171' : '#4ade80', badgeBg: delayed > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)' },
-    { icon: '📊', iconBg: 'rgba(167,139,250,0.15)', label: 'Avg Risk', value: `${avgRisk}%`, badge: avgRisk > 60 ? 'High' : avgRisk > 40 ? 'Medium' : 'Low', badgeColor: avgRisk > 60 ? '#f87171' : avgRisk > 40 ? '#fcd34d' : '#4ade80', badgeBg: avgRisk > 60 ? 'rgba(239,68,68,0.12)' : avgRisk > 40 ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)' },
+    {
+      icon: '📦', iconBg: 'rgba(59,130,246,0.15)',
+      label: 'Total Shipments', value: history.length,
+      badge: `${ongoingCount} active`, badgeColor: '#60a5fa', badgeBg: 'rgba(59,130,246,0.12)',
+    },
+    {
+      icon: '✅', iconBg: 'rgba(34,197,94,0.15)',
+      label: 'Delivered', value: onTime,
+      badge: history.length ? `${onTimePct}%` : '—',
+      badgeColor: '#4ade80', badgeBg: 'rgba(34,197,94,0.12)',
+      sub: 'successfully delivered',
+    },
+    {
+      icon: '🚛', iconBg: 'rgba(245,158,11,0.15)',
+      label: 'In Transit', value: atRisk,
+      badge: atRisk > 0 ? 'Active' : 'None',
+      badgeColor: atRisk > 0 ? '#fcd34d' : '#4ade80',
+      badgeBg: atRisk > 0 ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)',
+    },
+    {
+      icon: '❌', iconBg: 'rgba(239,68,68,0.15)',
+      label: 'Cancelled', value: delayed,
+      badge: delayed > 0 ? 'Stopped' : 'None',
+      badgeColor: delayed > 0 ? '#f87171' : '#4ade80',
+      badgeBg: delayed > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
+    },
     ...(autoSwitched > 0 ? [{ icon: '🤖', iconBg: 'rgba(167,139,250,0.15)', label: 'Auto-Switched', value: autoSwitched, badge: 'By AI', badgeColor: '#a78bfa', badgeBg: 'rgba(167,139,250,0.12)' }] : []),
     ...(alerts?.length > 0 ? [{ icon: '🔔', iconBg: 'rgba(239,68,68,0.15)', label: 'Live Alerts', value: alerts.length, badge: 'Real-time', badgeColor: '#f87171', badgeBg: 'rgba(239,68,68,0.12)' }] : []),
   ];
