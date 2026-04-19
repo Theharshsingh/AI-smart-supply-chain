@@ -83,7 +83,24 @@ function QRModal({ shipment, onClose }) {
   const [copied, setCopied] = useState(false);
   if (!shipment) return null;
 
-  const trackingUrl = `${window.location.origin}${window.location.pathname}?tracking=${shipment.trackingToken}`;
+  const trackingUrl = (() => {
+    // Encode shipment data directly in URL so any device can open it
+    const payload = {
+      id: shipment.id,
+      from: shipment.from,
+      to: shipment.to,
+      toLat: shipment.toLat,
+      toLon: shipment.toLon,
+      distanceKm: shipment.distanceKm,
+      durationMin: shipment.durationMin,
+      status: shipment.status,
+      startTime: shipment.startTime,
+      endTime: shipment.endTime,
+      trackingToken: shipment.trackingToken,
+    };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    return `${window.location.origin}${window.location.pathname}?tracking=${encoded}`;
+  })();
 
   function copyLink() {
     navigator.clipboard.writeText(trackingUrl);

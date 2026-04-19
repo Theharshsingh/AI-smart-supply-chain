@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import { CheckCircle, Clock, MapPin, Package, Truck, XCircle } from 'lucide-react';
 
-const STORAGE_KEY = 'shipment_history';
-
-function loadShipmentByToken(token) {
+// Decode shipment from URL — data is Base64 encoded so any device can open it
+function loadShipmentFromUrl() {
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-    return all.find(s => s.trackingToken === token) || null;
+    const param = new URLSearchParams(window.location.search).get('tracking');
+    if (!param) return null;
+    // Try Base64 decode first (new format)
+    try {
+      const json = decodeURIComponent(escape(atob(param)));
+      return JSON.parse(json);
+    } catch {
+      // Fallback: old token format — try localStorage
+      const all = JSON.parse(localStorage.getItem('shipment_history')) || [];
+      return all.find(s => s.trackingToken === param) || null;
+    }
   } catch { return null; }
 }
 
@@ -95,20 +103,22 @@ export default function TrackingPage() {
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Auto-refresh every 10s for ongoing shipments
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get('token');
-    if (!token) { setNotFound(true); return; }
+    const s = loadShipmentFromUrl();
+    if (!s) { setNotFound(true); return; }
+    setShipment(s);
 
-    function refresh() {
-      const s = loadShipmentByToken(token);
-      if (!s) setNotFound(true);
-      else setShipment(s);
+    // For ongoing shipments, re-read localStorage every 10s to get status updates
+    if (s.status === 'ongoing') {
+      const interval = setInterval(() => {
+        try {
+          const all = JSON.parse(localStorage.getItem('shipment_history')) || [];
+          const updated = all.find(x => x.trackingToken === s.trackingToken);
+          if (updated) setShipment(updated);
+        } catch {}
+      }, 10000);
+      return () => clearInterval(interval);
     }
-
-    refresh();
-    const interval = setInterval(refresh, 10000);
-    return () => clearInterval(interval);
   }, []);
 
   function copyLink() {
