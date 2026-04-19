@@ -12,8 +12,12 @@ import LiveDataPanel from './components/LiveDataPanel';
 import RiskChart from './components/RiskChart';
 import TripPlanner from './components/TripPlanner';
 import ShipmentDashboard from './components/ShipmentDashboard';
+import TrackingPage from './components/TrackingPage';
 import { useShipmentHistory } from './hooks/useShipmentHistory';
 import { weatherIcon, weatherColor } from './utils';
+
+// ── If ?tracking= param present, export TrackingPage directly ──────────────
+const _isTracking = new URLSearchParams(window.location.search).get('tracking');
 
 const TABS = [
   { id: 'plan',      label: 'Route Planner', icon: '🗺️' },
@@ -84,6 +88,9 @@ function BottomSheet({ open, onClose, title, icon, children }) {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
+  // ── Show public tracking page if ?tracking= param present ─────────────────────
+  if (_isTracking) return <TrackingPage />;
+
   const { shipments, env, alerts } = useSocket();
   const isMobile = useIsMobile();
 

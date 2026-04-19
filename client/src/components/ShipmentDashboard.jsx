@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Trash2, Eye, Square, MapPin, Clock, CheckCircle, XCircle, Loader, Navigation } from 'lucide-react';
+import { Trash2, Eye, Square, MapPin, Clock, CheckCircle, XCircle, Loader, Navigation, QrCode, Link, Copy, Check } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -77,6 +78,107 @@ function useGpsDistance(toLat, toLon, active) {
   return { distM, gpsError };
 }
 
+// ── QR Code + Tracking Link Modal ───────────────────────────────────────────
+function QRModal({ shipment, onClose }) {
+  const [copied, setCopied] = useState(false);
+  if (!shipment) return null;
+
+  const trackingUrl = `${window.location.origin}${window.location.pathname}?tracking=${shipment.trackingToken}`;
+
+  function copyLink() {
+    navigator.clipboard.writeText(trackingUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+    }} onClick={onClose}>
+      <div style={{
+        background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 20, padding: 28, width: '100%', maxWidth: 380,
+        boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>📦 Track Shipment</div>
+            <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Share this with your customer</div>
+          </div>
+          <button onClick={onClose} style={{
+            width: 30, height: 30, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+            color: '#64748b', cursor: 'pointer', fontSize: 14,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>✕</button>
+        </div>
+
+        {/* QR Code */}
+        <div style={{
+          background: '#fff', borderRadius: 16, padding: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: 20, boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+        }}>
+          <QRCodeSVG
+            value={trackingUrl}
+            size={200}
+            bgColor="#ffffff"
+            fgColor="#0f172a"
+            level="M"
+            includeMargin={false}
+          />
+        </div>
+
+        {/* Tracking ID */}
+        <div style={{
+          background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+          borderRadius: 10, padding: '10px 14px', marginBottom: 14, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 4 }}>TRACKING ID</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.05em' }}>
+            {shipment.trackingToken}
+          </div>
+        </div>
+
+        {/* Route summary */}
+        <div style={{
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94a3b8' }}>
+            <span style={{ color: '#22c55e' }}>●</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shipment.from?.split(',')[0]}</span>
+          </div>
+          <div style={{ width: 2, height: 10, background: 'rgba(255,255,255,0.1)', margin: '3px 0 3px 5px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94a3b8' }}>
+            <span style={{ color: '#ef4444' }}>●</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shipment.to?.split(',')[0]}</span>
+          </div>
+        </div>
+
+        {/* Copy link button */}
+        <button onClick={copyLink} style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          background: copied ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'linear-gradient(135deg,#3b82f6,#2563eb)',
+          border: 'none', borderRadius: 12, padding: '12px 20px',
+          color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          transition: 'all 0.25s', boxShadow: copied ? '0 4px 16px rgba(34,197,94,0.3)' : '0 4px 16px rgba(59,130,246,0.3)',
+        }}>
+          {copied ? <><Check size={15} /> Link Copied!</> : <><Copy size={15} /> Copy Tracking Link</>}
+        </button>
+
+        <div style={{ fontSize: 10, color: '#334155', textAlign: 'center', marginTop: 12 }}>
+          Customer can scan QR or open the link to track live
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Detail Modal ──────────────────────────────────────────────────────────────
 function DetailModal({ shipment, onClose }) {
   if (!shipment) return null;
@@ -129,7 +231,7 @@ function DetailModal({ shipment, onClose }) {
 }
 
 // ── Single shipment card with live GPS tracking ───────────────────────────────
-function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail }) {
+function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR }) {
   const isOngoing = s.status === 'ongoing';
   const { distM, gpsError } = useGpsDistance(s.toLat, s.toLon, isOngoing);
   const nearDest = distM != null && distM <= 500;
@@ -201,6 +303,19 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail }) {
         {/* Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
           <button
+            onClick={() => onShowQR(s)}
+            title="Show QR code & tracking link"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)',
+              borderRadius: 6, padding: '5px 10px', color: '#a78bfa',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <QrCode size={12} /> QR / Share
+          </button>
+
+          <button
             onClick={() => onViewDetail(s)}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
@@ -270,6 +385,7 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail }) {
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function ShipmentDashboard({ history, onStop, onDelete, onComplete }) {
   const [detail, setDetail] = useState(null);
+  const [qrShipment, setQrShipment] = useState(null);
   const [filter, setFilter] = useState('all');
 
   const filtered = history.filter(s => filter === 'all' || s.status === filter);
@@ -283,6 +399,7 @@ export default function ShipmentDashboard({ history, onStop, onDelete, onComplet
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <DetailModal shipment={detail} onClose={() => setDetail(null)} />
+      <QRModal shipment={qrShipment} onClose={() => setQrShipment(null)} />
 
       {/* Header + filters */}
       <div className="card" style={{ padding: '14px 16px' }}>
@@ -324,6 +441,7 @@ export default function ShipmentDashboard({ history, onStop, onDelete, onComplet
               onDelete={onDelete}
               onComplete={onComplete}
               onViewDetail={setDetail}
+              onShowQR={setQrShipment}
             />
           ))}
         </div>

@@ -15,8 +15,11 @@ export function useShipmentHistory() {
   const [history, setHistory] = useState(load);
 
   const addShipment = useCallback((shipment) => {
+    // Generate unique tracking token
+    const trackingToken = `TRK-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const shipmentWithToken = { ...shipment, trackingToken };
     setHistory(prev => {
-      const next = [shipment, ...prev];
+      const next = [shipmentWithToken, ...prev];
       save(next);
       return next;
     });
