@@ -8,13 +8,17 @@ export function useSocket() {
     shipments: [],
     env: { traffic: 0.3, weather: 'Clear', forecastWorst: 'Clear', alerts: [], apiStatus: {}, weatherData: {}, trafficData: {} },
     alerts: [],
+    driverShipments: [],
   });
   const socketRef = useRef(null);
 
   useEffect(() => {
     socketRef.current = io(API_URL);
     socketRef.current.on('update', payload => {
-      setData({ shipments: payload.shipments, env: payload.env, alerts: payload.env?.alerts || [] });
+      setData(prev => ({ ...prev, shipments: payload.shipments, env: payload.env, alerts: payload.env?.alerts || [] }));
+    });
+    socketRef.current.on('driver_shipments_update', payload => {
+      setData(prev => ({ ...prev, driverShipments: payload }));
     });
     return () => socketRef.current.disconnect();
   }, []);
@@ -229,5 +233,43 @@ export async function triggerRefresh() {
 
 export async function fetchInsights(origin, dest) {
   const res = await fetch(`${API_URL}/api/insights/${encodeURIComponent(origin)}/${encodeURIComponent(dest)}`);
+  return res.json();
+}
+
+// ── Driver Shipment APIs ──────────────────────────────────────────────────────────────
+function authHeader() {
+  const token = localStorage.getItem('auth_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function serverAddShipment(shipment) {
+  const res = await fetch(`${API_URL}/api/driver/shipments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(shipment),
+  });
+  return res.json();
+}
+
+export async function serverUpdateShipment(id, updates) {
+  const res = await fetch(`${API_URL}/api/driver/shipments/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(updates),
+  });
+  return res.json();
+}
+
+export async function serverGetMyShipments() {
+  const res = await fetch(`${API_URL}/api/driver/shipments`, {
+    headers: authHeader(),
+  });
+  return res.json();
+}
+
+export async function serverGetAllShipments() {
+  const res = await fetch(`${API_URL}/api/admin/shipments`, {
+    headers: authHeader(),
+  });
   return res.json();
 }

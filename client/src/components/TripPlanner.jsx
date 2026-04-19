@@ -276,7 +276,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
   const {
     isNavigating, gpsPosition, gpsError, currentStepIndex,
     liveRoute, isRerouting, distToNextTurn, speed, startNavigation, stopNavigation,
-  } = useNavigation(from, to, osrmRoutes?.[selectedRouteIdx] ?? null, handleArrived);
+  } = useNavigation(from, to, osrmRoutes?.[selectedRouteIdx] ?? null, handleArrived, activeShipmentId);
 
   // ── Route weather monitoring ──────────────────────────────────────────────
   const currentPolyline = osrmRoutes?.[selectedRouteIdx]?.polyline ?? null;

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { fetchOSRMRoute } from '../api';
+import { fetchOSRMRoute, serverUpdateShipment } from '../api';
 
 /** Haversine distance in metres between two lat/lng points */
 function haversine(lat1, lon1, lat2, lon2) {
@@ -22,7 +22,7 @@ function haversine(lat1, lon1, lat2, lon2) {
  * @param {{ polyline, steps, distanceKm, durationMin } | null} selectedRoute – locked route to navigate
  * @param {() => void} onArrived – called when driver is within 500m of destination
  */
-export function useNavigation(from, to, selectedRoute = null, onArrived = null) {
+export function useNavigation(from, to, selectedRoute = null, onArrived = null, activeShipmentId = null) {
   const [isNavigating, setIsNavigating]       = useState(false);
   const [gpsPosition, setGpsPosition]         = useState(null);   // { lat, lng, accuracy }
   const [gpsError, setGpsError]               = useState(null);
@@ -41,6 +41,7 @@ export function useNavigation(from, to, selectedRoute = null, onArrived = null) 
   // Speed tracking refs
   const prevPosRef          = useRef(null);   // { lat, lng, ts }
   const speedBufRef         = useRef([]);     // last 4 raw km/h values for smoothing
+  const lastGpsPushRef      = useRef(0);      // timestamp of last server GPS push
   useEffect(() => { onArrivedRef.current = onArrived; }, [onArrived]);
 
   // keep refs in sync
@@ -71,6 +72,17 @@ export function useNavigation(from, to, selectedRoute = null, onArrived = null) 
         const ts   = pos.timestamp;
 
         setGpsPosition({ lat, lng, accuracy: Math.round(acc) });
+
+        // ── Push GPS to server every 5s so admin can see live location ──
+        const now = Date.now();
+        if (activeShipmentId && now - lastGpsPushRef.current > 5000) {
+          lastGpsPushRef.current = now;
+          serverUpdateShipment(activeShipmentId, {
+            currentLat: lat,
+            currentLng: lng,
+            locationUpdatedAt: new Date().toISOString(),
+          }).catch(() => {});
+        }
 
         // ── Speed calculation ──────────────────────────────────────────
         // Skip if accuracy is too poor (> 40 m)
@@ -118,6 +130,7 @@ export function useNavigation(from, to, selectedRoute = null, onArrived = null) 
     setSpeed(0);
     prevPosRef.current    = null;
     speedBufRef.current   = [];
+    lastGpsPushRef.current = 0;
     lastReroutePosRef.current = null;
   }, []);
 

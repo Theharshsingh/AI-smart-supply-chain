@@ -108,7 +108,7 @@ export default function App() {
   );
   if (!user) return <LoginPage />;
 
-  const { shipments, env, alerts } = useSocket();
+  const { shipments, env, alerts, driverShipments } = useSocket();
   const isMobile = useIsMobile();
   const visibleTabs = TABS.filter(t => t.roles.includes(user.role));
 
@@ -126,7 +126,7 @@ export default function App() {
   // Mobile sheet state
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const { history, addShipment, stopShipment, deleteShipment, completeShipment } = useShipmentHistory();
+  const { history, addShipment, stopShipment, deleteShipment, completeShipment, updateLiveLocation } = useShipmentHistory();
 
   function handleStartShipment({ from, to, toLat, toLon, fromLat, fromLon, distanceKm, durationMin, routeIdx }) {
     const id = `SHP-${Date.now()}`;
@@ -197,6 +197,7 @@ export default function App() {
       gpsError={navState.gpsError}
       onStopNavigation={navState.onStopNavigation}
       weatherPoints={weatherPoints}
+      driverShipments={user.role === 'admin' ? driverShipments : []}
     />
   );
 

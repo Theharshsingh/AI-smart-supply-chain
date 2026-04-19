@@ -561,7 +561,7 @@ export default function LiveMap({
   shipments, selected, onSelect, planResult,
   gpsPosition, isNavigating, liveRoute,
   currentStepIndex, distToNextTurn, isRerouting, gpsError, onStopNavigation,
-  weatherPoints,
+  weatherPoints, driverShipments = [],
 }) {
   const [recenterLocation, setRecenterLocation] = useState(null);
   const tolls = planResult?.tolls || [];
@@ -731,6 +731,49 @@ export default function LiveMap({
           </Marker>
         </>
       )}
+
+      {/* ── Admin: Driver live locations ── */}
+      {driverShipments.filter(s => s.currentLat && s.currentLng && s.status === 'ongoing').map(s => (
+        <Marker
+          key={`drv-${s.id}`}
+          position={[s.currentLat, s.currentLng]}
+          icon={makeIcon('🚛', '#22c55e', 32)}
+          zIndexOffset={800}
+        >
+          <Popup>
+            <div style={{ background: '#111827', color: '#e2e8f0', padding: 10, borderRadius: 8, minWidth: 180 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>🚛 {s.driverName}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>{s.from?.split(',')[0]} → {s.to?.split(',')[0]}</div>
+              <div style={{ fontSize: 11, marginTop: 6 }}>
+                <div>Status: <b style={{ color: '#22c55e' }}>In Transit</b></div>
+                {s.distanceKm && <div>Distance: <b>{s.distanceKm} km</b></div>}
+                {s.locationUpdatedAt && (
+                  <div style={{ fontSize: 10, color: '#475569', marginTop: 4 }}>
+                    Updated: {new Date(s.locationUpdatedAt).toLocaleTimeString()}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+
+      {/* ── Admin: Driver destination pins ── */}
+      {driverShipments.filter(s => s.toLat && s.toLon && s.status === 'ongoing').map(s => (
+        <Marker
+          key={`dest-${s.id}`}
+          position={[s.toLat, s.toLon]}
+          icon={makeIcon('📍', '#ef4444', 24)}
+          zIndexOffset={700}
+        >
+          <Popup>
+            <div style={{ fontWeight: 700, fontSize: 12, color: '#111' }}>
+              Destination: {s.to?.split(',')[0]}<br />
+              <span style={{ fontWeight: 400, fontSize: 11, color: '#555' }}>Driver: {s.driverName}</span>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
 
       {/* ── Live shipments ── */}
       {shipments.map(s => {
