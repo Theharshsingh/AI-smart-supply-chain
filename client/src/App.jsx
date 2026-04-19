@@ -12,6 +12,7 @@ import LiveDataPanel from './components/LiveDataPanel';
 import RiskChart from './components/RiskChart';
 import TripPlanner from './components/TripPlanner';
 import ShipmentDashboard from './components/ShipmentDashboard';
+import AdminShipmentDashboard from './components/AdminShipmentDashboard';
 import TrackingPage from './components/TrackingPage';
 import LoginPage from './components/LoginPage';
 import DriversPage from './components/DriversPage';
@@ -397,12 +398,16 @@ export default function App() {
                     )}
 
                     {tab === 'dashboard' && (
-                      <ShipmentDashboard
-                        history={history}
-                        onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
-                        onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
-                        onComplete={id => { completeShipment(id); toast.success('🏁 Delivery Successful!', { icon: '✅', duration: 4000 }); }}
-                      />
+                      user.role === 'admin' ? (
+                        <AdminShipmentDashboard driverShipments={driverShipments} />
+                      ) : (
+                        <ShipmentDashboard
+                          history={history}
+                          onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
+                          onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
+                          onComplete={id => { completeShipment(id); toast.success('🏁 Delivery Successful!', { icon: '✅', duration: 4000 }); }}
+                        />
+                      )
                     )}
 
                     {tab === 'routes' && (
@@ -494,12 +499,16 @@ export default function App() {
             {/* My Shipments */}
             {tab === 'dashboard' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                <ShipmentDashboard
-                  history={history}
-                  onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
-                  onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
-                  onComplete={id => { completeShipment(id); toast.success('🏁 Delivery Successful!', { icon: '✅', duration: 4000 }); }}
-                />
+                {user.role === 'admin' ? (
+                  <AdminShipmentDashboard driverShipments={driverShipments} />
+                ) : (
+                  <ShipmentDashboard
+                    history={history}
+                    onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
+                    onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
+                    onComplete={id => { completeShipment(id); toast.success('🏁 Delivery Successful!', { icon: '✅', duration: 4000 }); }}
+                  />
+                )}
               </motion.div>
             )}
 
