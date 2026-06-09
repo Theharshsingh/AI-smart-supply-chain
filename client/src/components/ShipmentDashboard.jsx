@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Trash2, Eye, Square, MapPin, Clock, CheckCircle, XCircle, Loader, Navigation, QrCode, Link, Copy, Check } from 'lucide-react';
+import { Trash2, Eye, Square, MapPin, Clock, CheckCircle, XCircle, Loader, Navigation, QrCode, Copy, Check, Package, Inbox, SignalZero, Signal, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -33,7 +33,7 @@ function fmtDist(m) {
 function StatusBadge({ status }) {
   const map = {
     ongoing:   { bg: '#052e16', color: '#4ade80', border: '#166534', icon: <Loader size={10} />,      label: 'Ongoing' },
-    completed: { bg: '#0c1a3a', color: '#60a5fa', border: '#1e40af', icon: <CheckCircle size={10} />, label: '✅ Delivered' },
+    completed: { bg: '#0c1a3a', color: '#60a5fa', border: '#1e40af', icon: <CheckCircle size={10} />, label: 'Delivered' },
     cancelled: { bg: '#450a0a', color: '#f87171', border: '#991b1b', icon: <XCircle size={10} />,     label: 'Cancelled' },
   };
   const s = map[status] || map.cancelled;
@@ -125,7 +125,7 @@ function QRModal({ shipment, onClose }) {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>📦 Track Shipment</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}><Package size={16} color="#60a5fa" /> Track Shipment</div>
             <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Share this with your customer</div>
           </div>
           <button onClick={onClose} style={{
@@ -133,7 +133,7 @@ function QRModal({ shipment, onClose }) {
             background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
             color: '#64748b', cursor: 'pointer', fontSize: 14,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>✕</button>
+          }}><X size={14} /></button>
         </div>
 
         {/* QR Code */}
@@ -212,19 +212,19 @@ function DetailModal({ shipment, onClose }) {
         boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <div style={{ fontWeight: 800, fontSize: 15, color: '#f1f5f9' }}>📦 Shipment Details</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 18 }}>✕</button>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}><Package size={15} color="#60a5fa" /> Shipment Details</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: '#0a0e1a', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' }}>Route</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 14 }}>🟢</span>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
               <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 600 }}>{shipment.from}</span>
             </div>
             <div style={{ width: 2, height: 16, background: '#1e2d45', margin: '4px 0 4px 7px' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 14 }}>🔴</span>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
               <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 600 }}>{shipment.to}</span>
             </div>
           </div>
@@ -298,12 +298,12 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
           {isOngoing && (
             <div style={{ marginTop: 8 }}>
               {gpsError ? (
-                <span style={{ fontSize: 10, color: '#f87171', background: '#450a0a', border: '1px solid #991b1b', borderRadius: 4, padding: '2px 8px' }}>
-                  📡 GPS Error
+                <span style={{ fontSize: 10, color: '#f87171', background: '#450a0a', border: '1px solid #991b1b', borderRadius: 4, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <SignalZero size={10} /> GPS Error
                 </span>
               ) : distM == null ? (
-                <span style={{ fontSize: 10, color: '#f59e0b', background: '#422006', border: '1px solid #92400e', borderRadius: 4, padding: '2px 8px' }}>
-                  📡 Acquiring GPS…
+                <span style={{ fontSize: 10, color: '#f59e0b', background: '#422006', border: '1px solid #92400e', borderRadius: 4, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Signal size={10} /> Acquiring GPS…
                 </span>
               ) : (
                 <span style={{
@@ -311,8 +311,9 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
                   background: nearDest ? '#052e16' : '#0a0e1a',
                   color: nearDest ? '#4ade80' : '#60a5fa',
                   border: `1px solid ${nearDest ? '#166534' : '#1e40af'}`,
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
                 }}>
-                  📍 {fmtDist(distM)} to destination {nearDest ? '✅ Near!' : ''}
+                  <MapPin size={10} /> {fmtDist(distM)} to destination {nearDest ? '— Near!' : ''}
                 </span>
               )}
             </div>
@@ -366,7 +367,7 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
               }}
             >
               <Navigation size={12} />
-              {nearDest ? '✅ Reached!' : 'Reached Location'}
+              {nearDest ? 'Reached!' : 'Reached Location'}
             </button>
           )}
 
@@ -423,7 +424,7 @@ export default function ShipmentDashboard({ history, onStop, onDelete, onComplet
       {/* Header + filters */}
       <div className="card" style={{ padding: '14px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontWeight: 800, fontSize: 15, color: '#f1f5f9' }}>📦 My Shipments</div>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}><Package size={15} color="#60a5fa" /> My Shipments</div>
           <span style={{ fontSize: 11, color: '#475569' }}>{history.length} total</span>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -447,7 +448,7 @@ export default function ShipmentDashboard({ history, onStop, onDelete, onComplet
 
       {filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>📭</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}><Inbox size={36} color="#1e2d45" /></div>
           <div style={{ fontSize: 13 }}>No shipments yet. Plan a route and start a shipment!</div>
         </div>
       ) : (

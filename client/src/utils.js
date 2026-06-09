@@ -23,14 +23,14 @@ export function modeBadgeClass(mode) {
 }
 
 export function modeIcon(mode) {
-  if (mode === 'AIR') return '✈';
-  if (mode === 'TRAIN') return '🚂';
-  return '🚛';
+  if (mode === 'AIR') return 'AIR';
+  if (mode === 'TRAIN') return 'TRAIN';
+  return 'ROAD';
 }
 
 export function weatherIcon(w) {
-  const map = { Clear: '☀️', Cloudy: '☁️', Rain: '🌧️', Fog: '🌫️', Storm: '⛈️' };
-  return map[w] || '☀️';
+  // Returns a label; use WeatherIcon component in UI instead
+  return w || 'Clear';
 }
 
 export function weatherColor(w) {
@@ -43,24 +43,17 @@ export function fmtEta(h) {
   return `${Math.round(h)}h`;
 }
 
-/** Maps a weather risk level to a display colour */
+/** Maps a weather risk level to a display colour (5-level per spec) */
 export function weatherRiskColor(risk) {
-  if (risk === 'high'   || risk === 'severe')   return '#ef4444';
-  if (risk === 'medium' || risk === 'moderate') return '#f59e0b';
-  if (risk === 'light')                         return '#84cc16';
-  return '#22c55e';
+  if (risk === 'severe')                       return '#7f1d1d'; // dark red — thunderstorm
+  if (risk === 'high')                         return '#ef4444'; // red
+  if (risk === 'medium' || risk === 'moderate') return '#f59e0b'; // orange
+  if (risk === 'light')                        return '#eab308'; // yellow
+  return '#22c55e';                                              // green — safe
 }
 
 /** Returns an emoji for a weather condition string */
 export function conditionEmoji(condition = '') {
-  const map = {
-    Clear: '☀️', Clouds: '☁️', Cloudy: '☁️',
-    Rain: '🌧️', Drizzle: '🌦️',
-    Thunderstorm: '⛈️', Storm: '⛈️',
-    Snow: '❄️',
-    Mist: '🌫️', Fog: '🌫️', Haze: '🌫️',
-    Dust: '💨', Smoke: '💨', Sand: '💨',
-    Tornado: '🌪️', Squall: '🌀',
-  };
-  return map[condition] || '🌤️';
+  // Returns condition label; use WeatherIcon component in UI
+  return condition || 'Clear';
 }

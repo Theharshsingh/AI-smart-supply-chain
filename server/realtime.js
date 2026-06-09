@@ -2,49 +2,88 @@ require('dotenv').config();
 const axios = require('axios');
 const { getHistoricalData, decodePolyline } = require('./data');
 
-const OWM_KEY  = process.env.OPENWEATHER_API_KEY;
 const GMAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
-// ── Weather ───────────────────────────────────────────────────────────────────
-function owmIdToLabel(id) {
-  if (id >= 200 && id < 300) return 'Storm';
-  if (id >= 300 && id < 600) return 'Rain';
-  if (id >= 600 && id < 700) return 'Rain';
-  if (id === 741 || id === 721 || (id >= 700 && id < 800)) return 'Fog';
-  if (id === 800) return 'Clear';
+// ── Open-Meteo WMO weather code → label ──────────────────────────────────────
+function wmoToLabel(code) {
+  if (code === 0 || code === 1) return 'Clear';
+  if (code === 2 || code === 3) return 'Cloudy';
+  if (code >= 45 && code <= 48) return 'Fog';
+  if (code >= 51 && code <= 67) return 'Rain';
+  if (code >= 71 && code <= 77) return 'Rain'; // snow → Rain for risk purposes
+  if (code >= 80 && code <= 82) return 'Rain';
+  if (code >= 95 && code <= 99) return 'Storm';
   return 'Cloudy';
 }
 
+function wmoToDescription(code) {
+  const MAP = {
+    0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
+    45:'Fog',48:'Icy fog',51:'Light drizzle',53:'Moderate drizzle',55:'Dense drizzle',
+    61:'Slight rain',63:'Moderate rain',65:'Heavy rain',
+    71:'Slight snow',73:'Moderate snow',75:'Heavy snow',
+    80:'Slight rain showers',81:'Moderate rain showers',82:'Violent rain showers',
+    95:'Thunderstorm',96:'Thunderstorm with hail',99:'Thunderstorm with heavy hail',
+  };
+  return MAP[code] || 'Cloudy';
+}
+
+/**
+ * Fetch current + hourly forecast from Open-Meteo (free, no API key).
+ * Returns unified weather object compatible with the rest of the system.
+ */
 async function fetchWeather(lat, lng) {
-  if (!OWM_KEY || OWM_KEY.startsWith('your_')) {
-    return { condition: 'Clear', temp: 28, humidity: 60, windSpeed: 12, description: 'clear sky', forecast: [], source: 'heuristic' };
-  }
   try {
-    const [cur, fc] = await Promise.all([
-      axios.get(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OWM_KEY}&units=metric`, { timeout: 7000 }),
-      axios.get(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${OWM_KEY}&units=metric&cnt=6`, { timeout: 7000 }),
-    ]);
-    const w = cur.data;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+      `&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,visibility` +
+      `&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,visibility` +
+      `&wind_speed_unit=kmh&forecast_days=2&timezone=auto`;
+    const res = await axios.get(url, { timeout: 8000 });
+    const c = res.data.current;
+    const h = res.data.hourly;
+
+    // Build 6-slot forecast (next 18h in 3h steps)
+    const nowIdx = h.time.findIndex(t => new Date(t) >= new Date(c.time));
+    const startIdx = Math.max(0, nowIdx);
+    const forecast = [];
+    for (let i = startIdx; i < startIdx + 18 && i < h.time.length; i += 3) {
+      forecast.push({
+        time: h.time[i],
+        condition: wmoToLabel(h.weather_code[i]),
+        temp: Math.round(h.temperature_2m[i]),
+        description: wmoToDescription(h.weather_code[i]),
+        pop: h.precipitation_probability?.[i] ?? 0,
+        precipitation: h.precipitation?.[i] ?? 0,
+        windSpeed: Math.round(h.wind_speed_10m?.[i] ?? 0),
+        windGusts: Math.round(h.wind_gusts_10m?.[i] ?? 0),
+        visibility: h.visibility?.[i] != null ? Math.round(h.visibility[i] / 1000) : null,
+      });
+    }
+
     return {
-      condition: owmIdToLabel(w.weather[0].id),
-      temp: Math.round(w.main.temp),
-      feelsLike: Math.round(w.main.feels_like),
-      humidity: w.main.humidity,
-      windSpeed: Math.round(w.wind.speed * 3.6),
-      visibility: w.visibility ? Math.round(w.visibility / 1000) : null,
-      description: w.weather[0].description,
-      forecast: fc.data.list.slice(0, 6).map(f => ({
-        time: f.dt_txt,
-        condition: owmIdToLabel(f.weather[0].id),
-        temp: Math.round(f.main.temp),
-        description: f.weather[0].description,
-        pop: Math.round((f.pop || 0) * 100), // precipitation probability %
-      })),
-      source: 'openweathermap',
+      condition:    wmoToLabel(c.weather_code),
+      temp:         Math.round(c.temperature_2m),
+      humidity:     c.relative_humidity_2m ?? 60,
+      windSpeed:    Math.round(c.wind_speed_10m ?? 0),
+      windGusts:    Math.round(c.wind_gusts_10m ?? 0),
+      precipitation: c.precipitation ?? 0,
+      visibility:   c.visibility != null ? Math.round(c.visibility / 1000) : null,
+      description:  wmoToDescription(c.weather_code),
+      weatherCode:  c.weather_code,
+      forecast,
+      source: 'open-meteo',
+      // hourly arrays for ETA-matched lookup
+      _hourly: h,
     };
   } catch (err) {
-    console.error('[Weather]', err.message);
-    return { condition: 'Clear', temp: 28, humidity: 60, windSpeed: 12, description: 'clear sky', forecast: [], source: 'heuristic', error: err.message };
+    console.error('[Weather/OpenMeteo]', err.message);
+    // Dynamic heuristic based on time of day and season
+    const mo = new Date().getMonth(); // 0-11
+    const hr = new Date().getHours();
+    const baseTemp = mo >= 2 && mo <= 5 ? 36 : mo >= 6 && mo <= 8 ? 30 : mo >= 9 && mo <= 10 ? 28 : 22;
+    const timeAdj = hr >= 12 && hr <= 16 ? 3 : hr >= 20 || hr <= 5 ? -4 : 0;
+    return { condition: 'Clear', temp: baseTemp + timeAdj, humidity: 60, windSpeed: 12, windGusts: 15,
+      precipitation: 0, visibility: 10, description: 'clear sky', forecast: [], source: 'heuristic' };
   }
 }
 
@@ -168,6 +207,13 @@ function buildInsights(origin, dest, weatherData, trafficData) {
 }
 
 // ── OSRM Routing (free, no key needed) ───────────────────────────────────────
+function realisticDuration(osrmSeconds, distanceM) {
+  const distKm = distanceM / 1000;
+  const factor = distKm < 50 ? 1.5 : distKm < 150 ? 1.42 : 1.38;
+  const restStops = Math.floor((osrmSeconds * factor / 3600) / 4) * 15 * 60;
+  return Math.round((osrmSeconds * factor + restStops) / 60);
+}
+
 async function fetchOSRMRoute(oLat, oLng, dLat, dLng) {
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${oLng},${oLat};${dLng},${dLat}?overview=full&geometries=geojson`;
@@ -177,8 +223,8 @@ async function fetchOSRMRoute(oLat, oLng, dLat, dLng) {
     const coords = route.geometry.coordinates; // [[lng, lat], ...]
     const polyline = coords.map(([lng, lat]) => ({ lat, lng }));
     const distanceKm = Math.round(route.distance / 1000);
-    const durationMin = Math.round(route.duration / 60);
-    console.log(`[OSRM] ${distanceKm} km, ${durationMin} min`);
+    const durationMin = realisticDuration(route.duration, route.distance);
+    console.log(`[OSRM] ${distanceKm} km, ${durationMin} min (realistic)`);
     return [{
       index: 0,
       summary: 'OSRM Route',
@@ -194,60 +240,47 @@ async function fetchOSRMRoute(oLat, oLng, dLat, dLng) {
   }
 }
 
-// ── ETA-matched weather fetch ──────────────────────────────────────────────────
+// ── ETA-matched weather fetch using Open-Meteo hourly data ───────────────────
 /**
- * Fetch weather matched to the ETA time of a route waypoint.
- * - If ETA is within 3 hours → use current weather (faster, more accurate).
- * - If ETA > 3 hours away → find the OWM 5-day/3h forecast slot nearest to ETA.
- * Falls back to heuristic if no API key.
- *
- * @param {number} lat
- * @param {number} lng
- * @param {number} etaMs – absolute Unix timestamp (ms) when user will reach this point
+ * Fetch weather matched to the exact ETA time using Open-Meteo hourly forecast.
+ * Finds the hourly slot closest to the ETA timestamp — no API key needed.
  */
 async function fetchWeatherWithEta(lat, lng, etaMs) {
-  const nowMs = Date.now();
-  const THREE_HOURS = 3 * 60 * 60 * 1000;
-
-  // Near-term: current weather is accurate enough
-  if (!etaMs || (etaMs - nowMs) < THREE_HOURS) {
-    return fetchWeather(lat, lng);
-  }
-
-  if (!OWM_KEY || OWM_KEY.startsWith('your_')) {
-    return { condition: 'Clear', temp: 28, humidity: 60, windSpeed: 12, description: 'clear sky', forecast: [], source: 'heuristic', forecastTime: null };
-  }
-
   try {
-    const etaSec = Math.floor(etaMs / 1000);
-    // OWM 5-day/3h forecast — cnt=40 gives full 5 days
-    const fc = await axios.get(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${OWM_KEY}&units=metric&cnt=40`,
-      { timeout: 8000 }
-    );
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+      `&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,visibility` +
+      `&wind_speed_unit=kmh&forecast_days=2&timezone=auto`;
+    const res = await axios.get(url, { timeout: 8000 });
+    const h = res.data.hourly;
+    if (!h?.time?.length) throw new Error('empty hourly');
 
-    const slots = fc.data.list;
-    if (!slots?.length) throw new Error('empty forecast');
+    // Find hourly slot closest to ETA
+    const etaSec = etaMs / 1000;
+    let bestIdx = 0, bestDiff = Infinity;
+    h.time.forEach((t, i) => {
+      const diff = Math.abs(new Date(t).getTime() / 1000 - etaSec);
+      if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+    });
 
-    // Find forecast slot whose dt is closest to etaSec
-    const best = slots.reduce((a, b) =>
-      Math.abs(b.dt - etaSec) < Math.abs(a.dt - etaSec) ? b : a
-    );
-
+    const code = h.weather_code[bestIdx];
     return {
-      condition:    owmIdToLabel(best.weather[0].id),
-      temp:         Math.round(best.main.temp),
-      humidity:     best.main.humidity,
-      windSpeed:    Math.round(best.wind.speed * 3.6),
-      description:  best.weather[0].description,
-      visibility:   null,                          // not in /forecast endpoint
+      condition:    wmoToLabel(code),
+      temp:         Math.round(h.temperature_2m[bestIdx]),
+      humidity:     h.relative_humidity_2m?.[bestIdx] ?? 60,
+      windSpeed:    Math.round(h.wind_speed_10m?.[bestIdx] ?? 0),
+      windGusts:    Math.round(h.wind_gusts_10m?.[bestIdx] ?? 0),
+      precipitation: h.precipitation?.[bestIdx] ?? 0,
+      precipProb:   h.precipitation_probability?.[bestIdx] ?? 0,
+      visibility:   h.visibility?.[bestIdx] != null ? Math.round(h.visibility[bestIdx] / 1000) : null,
+      description:  wmoToDescription(code),
+      weatherCode:  code,
       forecast:     [],
-      source:       'openweathermap_forecast',
-      forecastTime: new Date(best.dt * 1000).toISOString(),
+      source:       'open-meteo-forecast',
+      forecastTime: h.time[bestIdx],
     };
   } catch (err) {
-    console.error('[WeatherEta]', err.message);
-    return fetchWeather(lat, lng);                 // graceful fallback
+    console.error('[WeatherEta/OpenMeteo]', err.message);
+    return fetchWeather(lat, lng);
   }
 }
 

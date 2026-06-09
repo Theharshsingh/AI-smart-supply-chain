@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { fetchInsights } from '../api';
+import { Brain, BarChart2, Clock, CloudRain, Moon } from 'lucide-react';
+
+const INSIGHT_ICONS = [BarChart2, Clock, CloudRain, Moon];
 
 export default function InsightsPanel({ shipment }) {
   const [insights, setInsights] = useState([]);
@@ -17,21 +20,24 @@ export default function InsightsPanel({ shipment }) {
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontWeight: 700, fontSize: 14 }}>🧠 Predictive Insights</div>
+      <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
+        <Brain size={15} color="#a78bfa" /> Predictive Insights
+      </div>
       {shipment && (
         <div style={{ fontSize: 11, color: '#64748b' }}>
           Based on historical data for {shipment.origin} → {shipment.destination}
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {items.map((insight, i) => (
-          <div key={i} className="card2" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 16, marginTop: 1 }}>
-              {i === 0 ? '📊' : i === 1 ? '⏰' : i === 2 ? '🌧️' : '🌙'}
-            </span>
-            <span style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>{insight}</span>
-          </div>
-        ))}
+        {items.map((insight, i) => {
+          const Icon = INSIGHT_ICONS[i % INSIGHT_ICONS.length];
+          return (
+            <div key={i} className="card2" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <Icon size={16} color="#60a5fa" style={{ flexShrink: 0, marginTop: 1 }} />
+              <span style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>{insight}</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Mini stats */}

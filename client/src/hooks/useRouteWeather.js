@@ -5,7 +5,7 @@ import { addEtaTimestamps } from '../services/etaCalculator';
 import { classifyRisk, buildRouteAlerts, routeWeatherScore } from '../services/riskEngine';
 import { analyzeRoutes, getBestRoute } from '../services/reroutingEngine';
 
-const REFRESH_INTERVAL_MS = 12 * 60 * 1000; // 12 minutes
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — live monitoring per spec
 
 /**
  * useRouteWeather
@@ -41,9 +41,9 @@ export function useRouteWeather(polyline, durationMin = 0, allRoutes = null, dep
     setError(null);
     try {
       const durationMs = (durMin || 0) * 60 * 1000;
-      const sampled    = sampleRoutePoints(pl, durationMs, 14, 10);
+      const sampled    = sampleRoutePoints(pl, durationMs, 14, 5);
       const withEta    = addEtaTimestamps(sampled, departRef.current);
-      const points     = await fetchWeatherForRoute(withEta, 3);
+      const points     = await fetchWeatherForRoute(withEta);
 
       // Enrich each point with classified risk
       const enriched = points.map(pt => ({
@@ -68,8 +68,8 @@ export function useRouteWeather(polyline, durationMin = 0, allRoutes = null, dep
     setRerouteLoading(true);
     try {
       const analyses = await analyzeRoutes(routes, departRef.current);
-      const best     = getBestRoute(analyses, 0);
-      setRouteAnalysis({ analyses, best });
+      const bestResult = getBestRoute(analyses, 0);
+      setRouteAnalysis({ ...bestResult, analyses: bestResult.scoredAnalyses || analyses });
     } catch {
       setRouteAnalysis(null);
     } finally {

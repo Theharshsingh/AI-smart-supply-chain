@@ -1,4 +1,4 @@
-import { modeBadgeClass, modeIcon, statusBadgeClass, riskColor } from '../utils';
+import { modeBadgeClass, statusBadgeClass, riskColor } from '../utils';
 
 export default function ShipmentList({ shipments, selected, onSelect }) {
   if (!shipments.length) {
@@ -43,7 +43,7 @@ export default function ShipmentList({ shipments, selected, onSelect }) {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-              <span className={`badge ${modeBadgeClass(s.currentMode)}`}>{modeIcon(s.currentMode)} {s.currentMode}</span>
+              <span className={`badge ${modeBadgeClass(s.currentMode)}`}>{s.currentMode}</span>
               <span style={{ fontSize: 11, color: 'var(--tx-3)' }}>ETA {Math.round(s.eta)}h</span>
             </div>
 

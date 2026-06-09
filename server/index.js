@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const cors   = require('cors');
 const cron   = require('node-cron');
 const { registerAuthRoutes, authMiddleware, adminOnly, seedDefaultUsers } = require('./auth');
+const { registerOrderRoutes } = require('./orders');
 
 const { generateShipments, interpolate, advanceAlongPolyline, geocodePlace, getAutocompleteSuggestions } = require('./data');
 const { generateRoutes, calculateRisk, haversineKm } = require('./engine');
@@ -22,6 +23,7 @@ app.use(express.json());
 // ── Auth routes + seed default admin ─────────────────────────────────────────
 seedDefaultUsers();
 registerAuthRoutes(app);
+registerOrderRoutes(app, io, authMiddleware, adminOnly);
 
 // ── Driver Shipments Store (server-side) ──────────────────────────────────────
 const fs = require('fs');
@@ -88,7 +90,7 @@ let shipments = generateShipments(6);
 
 let globalEnv = {
   traffic: 0.3, weather: 'Clear', forecastWorst: 'Clear',
-  weatherData: { condition: 'Clear', temp: 28, humidity: 60, windSpeed: 12, description: 'clear sky', forecast: [], source: 'heuristic' },
+  weatherData: { condition: 'Clear', temp: null, humidity: 60, windSpeed: 12, description: 'Fetching...', forecast: [], source: 'heuristic' },
   trafficData: { congestion: 0.3, source: 'heuristic' },
   directionsData: null,
   alerts: [], lastUpdated: new Date().toISOString(),

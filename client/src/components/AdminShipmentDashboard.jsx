@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, Clock, Truck, CheckCircle, XCircle, Loader, Eye, Navigation } from 'lucide-react';
+import { MapPin, Clock, Truck, CheckCircle, XCircle, Loader, Eye, Package, Inbox, SignalZero, PartyPopper, X } from 'lucide-react';
 
 function fmtTime(iso) {
   if (!iso) return '—';
@@ -69,8 +69,8 @@ function DetailModal({ shipment, onClose }) {
       }} onClick={e => e.stopPropagation()}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#f1f5f9' }}>📦 Order Details</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 18 }}>✕</button>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}><Package size={16} color="#60a5fa" /> Order Details</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
         </div>
 
         {/* Driver info */}
@@ -79,7 +79,7 @@ function DetailModal({ shipment, onClose }) {
           borderRadius: 12, padding: '12px 14px', marginBottom: 14,
           display: 'flex', alignItems: 'center', gap: 12,
         }}>
-          <div style={{ fontSize: 28 }}>🚛</div>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Truck size={22} color="#60a5fa" /></div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{shipment.driverName}</div>
             <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Driver</div>
@@ -170,7 +170,7 @@ function OrderCard({ s, onViewDetail }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Driver + status */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>🚛 {s.driverName}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Truck size={14} color="#60a5fa" /> {s.driverName}</span>
             <StatusBadge status={s.status} />
             {s.distanceKm && (
               <span style={{ fontSize: 10, color: '#475569', background: 'rgba(255,255,255,0.05)', padding: '2px 7px', borderRadius: 4 }}>
@@ -231,7 +231,7 @@ function OrderCard({ s, onViewDetail }) {
               border: `1px solid ${nearDest ? 'rgba(34,197,94,0.3)' : 'rgba(59,130,246,0.2)'}`,
             }}>
               <div style={{ width: 5, height: 5, borderRadius: '50%', background: nearDest ? '#4ade80' : '#60a5fa', animation: 'pulse 2s infinite' }} />
-              {nearDest ? '🎉 Almost there!' : `${fmtDist(distToDestM)} to dest`}
+              {nearDest ? <><PartyPopper size={10} /> Almost there!</> : `${fmtDist(distToDestM)} to dest`}
               {gpsAge != null && <span style={{ opacity: 0.6 }}>· {gpsAge}s ago</span>}
             </span>
           ) : (
@@ -239,23 +239,24 @@ function OrderCard({ s, onViewDetail }) {
               fontSize: 10, padding: '2px 8px', borderRadius: 6,
               background: 'rgba(245,158,11,0.1)', color: '#fcd34d',
               border: '1px solid rgba(245,158,11,0.2)',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
             }}>
-              📡 Waiting for GPS…
+              <SignalZero size={10} /> Waiting for GPS…
             </span>
           )
         )}
 
         {/* Completed time */}
         {s.status === 'completed' && s.endTime && (
-          <span style={{ fontSize: 10, color: '#4ade80' }}>
-            ✅ Delivered {fmtTime(s.endTime)}
+          <span style={{ fontSize: 10, color: '#4ade80', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle size={10} /> Delivered {fmtTime(s.endTime)}
           </span>
         )}
 
         {/* Cancelled time */}
         {s.status === 'cancelled' && s.endTime && (
-          <span style={{ fontSize: 10, color: '#f87171' }}>
-            ❌ Cancelled {fmtTime(s.endTime)}
+          <span style={{ fontSize: 10, color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <XCircle size={10} /> Cancelled {fmtTime(s.endTime)}
           </span>
         )}
       </div>
@@ -303,7 +304,7 @@ export default function AdminShipmentDashboard({ driverShipments = [] }) {
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--tx-1)' }}>📦 All Orders</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--tx-1)', display: 'flex', alignItems: 'center', gap: 8 }}><Package size={16} color="#60a5fa" /> All Orders</div>
             <div style={{ fontSize: 12, color: 'var(--tx-3)', marginTop: 3 }}>
               {counts.ongoing} in transit · {counts.completed} delivered · {counts.cancelled} cancelled
             </div>
@@ -321,7 +322,7 @@ export default function AdminShipmentDashboard({ driverShipments = [] }) {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 Search by driver, location, order ID..."
+          placeholder="Search by driver, location, order ID..."
           style={{
             width: '100%', background: 'rgba(255,255,255,0.04)',
             border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10,
@@ -337,9 +338,9 @@ export default function AdminShipmentDashboard({ driverShipments = [] }) {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[
             { key: 'all',       label: 'All',        color: '#60a5fa' },
-            { key: 'ongoing',   label: '🚛 In Transit', color: '#4ade80' },
-            { key: 'completed', label: '✅ Delivered',  color: '#60a5fa' },
-            { key: 'cancelled', label: '❌ Cancelled',  color: '#f87171' },
+            { key: 'ongoing',   label: 'In Transit',  color: '#4ade80' },
+            { key: 'completed', label: 'Delivered',   color: '#60a5fa' },
+            { key: 'cancelled', label: 'Cancelled',   color: '#f87171' },
           ].map(f => (
             <button key={f.key} onClick={() => setFilter(f.key)} style={{
               background: filter === f.key ? f.color + '22' : 'transparent',
@@ -360,7 +361,7 @@ export default function AdminShipmentDashboard({ driverShipments = [] }) {
       {/* Order list */}
       {filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--tx-3)' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Inbox size={40} color="#1e2d45" /></div>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
             {driverShipments.length === 0 ? 'No orders yet' : 'No orders match this filter'}
           </div>

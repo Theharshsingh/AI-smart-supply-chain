@@ -265,6 +265,7 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
   const [osrmLoading, setOsrmLoading] = useState(false);
   const [tolls, setTolls] = useState([]);
   const [activeShipmentId, setActiveShipmentId] = useState(null);
+  const prevBestRef = useRef(null);
 
   const handleArrived = useCallback(() => {
     if (activeShipmentId) {
@@ -290,6 +291,20 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
   useEffect(() => {
     onWeatherUpdate?.(weatherPoints);
   }, [weatherPoints, onWeatherUpdate]);
+
+  // ── Live monitoring: toast if better weather route becomes available ────────────
+  useEffect(() => {
+    if (!routeAnalysis) return;
+    const bestIdx = routeAnalysis.recommended ?? routeAnalysis.best?.recommended;
+    if (bestIdx == null) return;
+    if (prevBestRef.current !== null && bestIdx !== selectedRouteIdx && prevBestRef.current === selectedRouteIdx) {
+      toast('🌦 Better weather route available!', {
+        icon: '🔀', duration: 6000,
+        style: { background: '#0c1a3a', border: '1px solid #22c55e', color: '#f1f5f9' },
+      });
+    }
+    prevBestRef.current = bestIdx;
+  }, [routeAnalysis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stable key per route so WeatherAlertBanner resets on route change
   const routeWeatherKey = currentPolyline?.length

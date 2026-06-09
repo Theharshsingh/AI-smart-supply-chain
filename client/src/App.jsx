@@ -18,19 +18,35 @@ import LoginPage from './components/LoginPage';
 import DriversPage from './components/DriversPage';
 import { useShipmentHistory } from './hooks/useShipmentHistory';
 import { useAuth } from './hooks/useAuth';
-import { weatherIcon, weatherColor } from './utils';
+import { weatherColor } from './utils';
+import {
+  Map, Package, Truck, Shuffle, Brain, Globe,
+  Rocket, LogOut, Search, Moon, Sun, X,
+  CloudSun, CloudRain, Cloud, CloudLightning, Wind,
+  TrafficCone, Bell, CheckCircle, Trash2, StopCircle,
+  Loader2,
+} from 'lucide-react';
 
 // ── If ?tracking= param present, export TrackingPage directly ──────────────
 const _isTracking = new URLSearchParams(window.location.search).get('tracking');
 
 const TABS = [
-  { id: 'plan',      label: 'Route Planner', icon: '🗺️', roles: ['admin', 'driver'] },
-  { id: 'dashboard', label: 'Shipments',     icon: '📦', roles: ['admin', 'driver'] },
-  { id: 'drivers',   label: 'Drivers',       icon: '🚛', roles: ['admin'] },
-  { id: 'routes',    label: 'Routes',        icon: '🔀', roles: ['admin'] },
-  { id: 'insights',  label: 'Insights',      icon: '🧠', roles: ['admin'] },
-  { id: 'livedata',  label: 'Live Data',     icon: '🌐', roles: ['admin'] },
+  { id: 'plan',      label: 'Route Planner', Icon: Map,     roles: ['admin', 'driver'] },
+  { id: 'dashboard', label: 'Shipments',     Icon: Package, roles: ['admin', 'driver'] },
+  { id: 'drivers',   label: 'Drivers',       Icon: Truck,   roles: ['admin'] },
+  { id: 'routes',    label: 'Routes',        Icon: Shuffle, roles: ['admin'] },
+  { id: 'insights',  label: 'Insights',      Icon: Brain,   roles: ['admin'] },
+  { id: 'livedata',  label: 'Live Data',     Icon: Globe,   roles: ['admin'] },
 ];
+
+function WeatherIcon({ w, size = 14 }) {
+  const props = { size, strokeWidth: 2 };
+  if (w === 'Rain' || w === 'Drizzle') return <CloudRain {...props} />;
+  if (w === 'Cloudy' || w === 'Clouds') return <Cloud {...props} />;
+  if (w === 'Storm' || w === 'Thunderstorm') return <CloudLightning {...props} />;
+  if (w === 'Fog' || w === 'Mist' || w === 'Haze') return <Wind {...props} />;
+  return <CloudSun {...props} />;
+}
 
 // ── Detect mobile ─────────────────────────────────────────────────────────────
 function useIsMobile() {
@@ -45,7 +61,7 @@ function useIsMobile() {
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ icon, iconBg, label, value, badge, badgeColor, badgeBg, sub }) {
+function KpiCard({ Icon, iconBg, iconColor, label, value, badge, badgeColor, badgeBg, sub }) {
   return (
     <motion.div
       className="kpi-card"
@@ -55,7 +71,9 @@ function KpiCard({ icon, iconBg, label, value, badge, badgeColor, badgeBg, sub }
       whileHover={{ y: -4, transition: { duration: 0.18 } }}
     >
       <div className="kpi-top">
-        <div className="kpi-icon" style={{ background: iconBg }}>{icon}</div>
+        <div className="kpi-icon" style={{ background: iconBg }}>
+          {Icon && <Icon size={17} color={iconColor} strokeWidth={2} />}
+        </div>
         {badge && <span className="kpi-badge" style={{ color: badgeColor, background: badgeBg }}>{badge}</span>}
       </div>
       <div className="kpi-val">{value}</div>
@@ -66,7 +84,7 @@ function KpiCard({ icon, iconBg, label, value, badge, badgeColor, badgeBg, sub }
 }
 
 // ── Bottom Sheet (mobile) ─────────────────────────────────────────────────────
-function BottomSheet({ open, onClose, title, icon, children }) {
+function BottomSheet({ open, onClose, title, Icon, children }) {
   // Prevent body scroll when open
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden';
@@ -81,9 +99,9 @@ function BottomSheet({ open, onClose, title, icon, children }) {
         <div className="bottom-sheet-handle" />
         <div className="bottom-sheet-header">
           <div className="bottom-sheet-title">
-            <span>{icon}</span>{title}
+            {Icon && <Icon size={15} />}{title}
           </div>
-          <button className="bottom-sheet-close" onClick={onClose}>✕</button>
+          <button className="bottom-sheet-close" onClick={onClose}><X size={14} /></button>
         </div>
         <div className="bottom-sheet-body">{children}</div>
       </div>
@@ -93,25 +111,9 @@ function BottomSheet({ open, onClose, title, icon, children }) {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  // ── Show public tracking page if ?tracking= param present ─────────────────────
-  if (_isTracking) return <TrackingPage />;
-
   const { user, loading: authLoading, logout } = useAuth();
-
-  // ── Show login if not authenticated ─────────────────────────────────────────
-  if (authLoading) return (
-    <div style={{ minHeight: '100vh', background: '#020817', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontFamily: 'Inter, sans-serif' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>🚀</div>
-        <div>Loading…</div>
-      </div>
-    </div>
-  );
-  if (!user) return <LoginPage />;
-
   const { shipments, env, alerts, driverShipments } = useSocket();
   const isMobile = useIsMobile();
-  const visibleTabs = TABS.filter(t => t.roles.includes(user.role));
 
   const [selected, setSelected]     = useState(null);
   const [tab, setTab]               = useState('plan');
@@ -123,22 +125,36 @@ export default function App() {
     currentStepIndex: 0, distToNextTurn: null, isRerouting: false,
     gpsError: null, onStopNavigation: null, speed: 0,
   });
-
-  // Mobile sheet state
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const { history, addShipment, stopShipment, deleteShipment, completeShipment, updateLiveLocation } = useShipmentHistory();
 
+  // ── Show public tracking page if ?tracking= param present ─────────────────────
+  if (_isTracking) return <TrackingPage />;
+
+  // ── Show login if not authenticated ─────────────────────────────────────────
+  if (authLoading) return (
+    <div style={{ minHeight: '100vh', background: '#020817', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ textAlign: 'center' }}>
+        <Loader2 size={32} color="#3b82f6" style={{ marginBottom: 12, animation: 'spin 1s linear infinite' }} />
+        <div>Loading…</div>
+      </div>
+    </div>
+  );
+  if (!user) return <LoginPage />;
+
+  const visibleTabs = TABS.filter(t => t.roles.includes(user.role));
+
   function handleStartShipment({ from, to, toLat, toLon, fromLat, fromLon, distanceKm, durationMin, routeIdx }) {
     const id = `SHP-${Date.now()}`;
     addShipment({ id, from, to, fromLat, fromLon, toLat, toLon, distanceKm, durationMin, routeIdx, status: 'ongoing', startTime: new Date().toISOString(), endTime: null });
-    toast.success('Shipment started! Track it in My Shipments.', { icon: '📦' });
+    toast.success('Shipment started! Track it in My Shipments.');
     return id;
   }
 
   function handleShipmentArrived(id) {
     completeShipment(id);
-    toast.success('🏁 Delivery Successful! Shipment completed.', { duration: 5000, icon: '✅' });
+    toast.success('Delivery Successful! Shipment completed.', { duration: 5000 });
   }
 
   // ── KPI — admin uses driverShipments, driver uses own history ──────────────
@@ -158,33 +174,33 @@ export default function App() {
   // ── KPI cards data — based on user's actual shipment history ─────────────
   const kpiCards = [
     {
-      icon: '📦', iconBg: 'rgba(59,130,246,0.15)',
+      Icon: Package, iconBg: 'rgba(59,130,246,0.15)', iconColor: '#60a5fa',
       label: 'Total Orders', value: kpiSource.length,
       badge: `${ongoingCount} active`, badgeColor: '#60a5fa', badgeBg: 'rgba(59,130,246,0.12)',
     },
     {
-      icon: '✅', iconBg: 'rgba(34,197,94,0.15)',
+      Icon: CheckCircle, iconBg: 'rgba(34,197,94,0.15)', iconColor: '#4ade80',
       label: 'Delivered', value: onTime,
       badge: kpiSource.length ? `${onTimePct}%` : '—',
       badgeColor: '#4ade80', badgeBg: 'rgba(34,197,94,0.12)',
       sub: 'successfully delivered',
     },
     {
-      icon: '🚛', iconBg: 'rgba(245,158,11,0.15)',
+      Icon: Truck, iconBg: 'rgba(245,158,11,0.15)', iconColor: '#fcd34d',
       label: 'In Transit', value: atRisk,
       badge: atRisk > 0 ? 'Active' : 'None',
       badgeColor: atRisk > 0 ? '#fcd34d' : '#4ade80',
       badgeBg: atRisk > 0 ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)',
     },
     {
-      icon: '❌', iconBg: 'rgba(239,68,68,0.15)',
+      Icon: StopCircle, iconBg: 'rgba(239,68,68,0.15)', iconColor: '#f87171',
       label: 'Cancelled', value: delayed,
       badge: delayed > 0 ? 'Stopped' : 'None',
       badgeColor: delayed > 0 ? '#f87171' : '#4ade80',
       badgeBg: delayed > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
     },
-    ...(autoSwitched > 0 ? [{ icon: '🤖', iconBg: 'rgba(167,139,250,0.15)', label: 'Auto-Switched', value: autoSwitched, badge: 'By AI', badgeColor: '#a78bfa', badgeBg: 'rgba(167,139,250,0.12)' }] : []),
-    ...(alerts?.length > 0 ? [{ icon: '🔔', iconBg: 'rgba(239,68,68,0.15)', label: 'Live Alerts', value: alerts.length, badge: 'Real-time', badgeColor: '#f87171', badgeBg: 'rgba(239,68,68,0.12)' }] : []),
+    ...(autoSwitched > 0 ? [{ Icon: Shuffle, iconBg: 'rgba(167,139,250,0.15)', iconColor: '#a78bfa', label: 'Auto-Switched', value: autoSwitched, badge: 'By AI', badgeColor: '#a78bfa', badgeBg: 'rgba(167,139,250,0.12)' }] : []),
+    ...(alerts?.length > 0 ? [{ Icon: Bell, iconBg: 'rgba(239,68,68,0.15)', iconColor: '#f87171', label: 'Live Alerts', value: alerts.length, badge: 'Real-time', badgeColor: '#f87171', badgeBg: 'rgba(239,68,68,0.12)' }] : []),
   ];
 
   // ── Shared LiveMap ────────────────────────────────────────────────────────
@@ -232,7 +248,7 @@ export default function App() {
       {/* ── Desktop Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="brand-icon">🚀</div>
+          <div className="brand-icon"><Rocket size={16} color="#fff" strokeWidth={2} /></div>
           <div>
             <div className="brand-name">SupplyChain</div>
             <div className="brand-sub">Guardian Platform</div>
@@ -246,7 +262,7 @@ export default function App() {
               className={`nav-btn ${tab === t.id ? 'active' : ''}`}
               onClick={() => setTab(t.id)}
             >
-              <span className="ni">{t.icon}</span>
+              <span className="ni"><t.Icon size={16} strokeWidth={2} /></span>
               <span style={{ flex: 1 }}>{t.label}</span>
               {t.id === 'dashboard' && ongoingCount > 0 && (
                 <span style={{ background: 'var(--green)', color: '#fff', borderRadius: 999, fontSize: 9, fontWeight: 800, padding: '1px 6px', lineHeight: 1.6 }}>
@@ -274,7 +290,7 @@ export default function App() {
             borderRadius: 'var(--r-md)', padding: '7px 12px',
             color: '#f87171', fontSize: 11, fontWeight: 600, cursor: 'pointer',
           }}>
-            🚪 Sign Out
+            <LogOut size={13} /> Sign Out
           </button>
         </div>
       </aside>
@@ -287,12 +303,12 @@ export default function App() {
           {/* Mobile: show brand */}
           {isMobile ? (
             <div className="mobile-topbar-brand">
-              <div className="brand-icon">🚀</div>
+              <div className="brand-icon"><Rocket size={13} color="#fff" strokeWidth={2} /></div>
               <div className="brand-name">SupplyChain</div>
             </div>
           ) : (
             <div className="top-bar-title">
-              {TABS.find(t => t.id === tab)?.icon}{' '}
+              {(() => { const T = TABS.find(t => t.id === tab); return T ? <T.Icon size={16} strokeWidth={2} /> : null; })()}{' '}
               {TABS.find(t => t.id === tab)?.label}
             </div>
           )}
@@ -301,13 +317,13 @@ export default function App() {
 
           {/* Weather pill — always visible */}
           <div className="hdr-pill" style={{ display: 'flex' }}>
-            <span>{weatherIcon(env.weather)}</span>
+            <WeatherIcon w={env.weather} size={13} />
             <span style={{ color: weatherColor(env.weather), fontWeight: 600 }}>{env.weather || 'Clear'}</span>
           </div>
 
           {/* Traffic pill — desktop only (hidden via CSS) */}
           <div className="hdr-pill">
-            <span>🚦</span>
+            <TrafficCone size={13} color={trafficPct > 70 ? 'var(--red)' : trafficPct > 50 ? 'var(--amber)' : 'var(--green)'} />
             <span style={{ fontWeight: 600, color: trafficPct > 70 ? 'var(--red)' : trafficPct > 50 ? 'var(--amber)' : 'var(--green)' }}>
               {trafficPct}% Traffic
             </span>
@@ -321,7 +337,7 @@ export default function App() {
           )}
 
           <button className="theme-btn" onClick={() => setDark(d => !d)} title="Toggle theme">
-            {dark ? '☀️' : '🌙'}
+            {dark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
         </header>
 
@@ -346,7 +362,7 @@ export default function App() {
                     className="mobile-search-fab"
                     onClick={() => setSheetOpen(true)}
                   >
-                    <span className="mobile-search-fab-icon">🔍</span>
+                    <span className="mobile-search-fab-icon"><Search size={16} color="var(--tx-3)" /></span>
                     <div className="mobile-search-fab-text">
                       {planResult?.origin
                         ? `${planResult.origin.formattedAddress?.split(',')[0]} → ${planResult.destination?.formattedAddress?.split(',')[0] || '...'}`
@@ -364,7 +380,7 @@ export default function App() {
                     onClick={() => setSheetOpen(true)}
                     title="Route Planner"
                   >
-                    🗺️
+                    <Map size={20} color="var(--tx-1)" />
                   </button>
                 </div>
 
@@ -373,7 +389,7 @@ export default function App() {
                   open={sheetOpen}
                   onClose={() => setSheetOpen(false)}
                   title="Route Planner"
-                  icon="🗺️"
+                  Icon={Map}
                 >
                   {tripPlanner}
                 </BottomSheet>
@@ -406,9 +422,9 @@ export default function App() {
                       ) : (
                         <ShipmentDashboard
                           history={history}
-                          onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
-                          onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
-                          onComplete={id => { completeShipment(id); toast.success('🏁 Delivery Successful!', { icon: '✅', duration: 4000 }); }}
+                          onStop={id => { stopShipment(id); toast.success('Shipment stopped.'); }}
+                          onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.'); }}
+                          onComplete={id => { completeShipment(id); toast.success('Delivery Successful!', { duration: 4000 }); }}
                         />
                       )
                     )}
@@ -417,7 +433,7 @@ export default function App() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <div className="card">
                           <div className="card-hdr">
-                            <div className="card-title"><div className="ct-icon">📦</div>Select Shipment</div>
+                            <div className="card-title"><div className="ct-icon"><Package size={13} color="#60a5fa" /></div>Select Shipment</div>
                           </div>
                           <ShipmentList shipments={shipments} selected={selected} onSelect={setSelected} />
                         </div>
@@ -429,7 +445,7 @@ export default function App() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <div className="card">
                           <div className="card-hdr">
-                            <div className="card-title"><div className="ct-icon">📦</div>Select Shipment</div>
+                            <div className="card-title"><div className="ct-icon"><Package size={13} color="#60a5fa" /></div>Select Shipment</div>
                           </div>
                           <ShipmentList shipments={shipments} selected={selected} onSelect={setSelected} />
                         </div>
@@ -464,7 +480,7 @@ export default function App() {
                   {t.id === 'dashboard' && ongoingCount > 0 && (
                     <span className="mobile-nav-badge">{ongoingCount}</span>
                   )}
-                  <span className="m-icon">{t.icon}</span>
+                  <span className="m-icon"><t.Icon size={20} strokeWidth={2} /></span>
                   <span className="m-label">{t.label}</span>
                 </button>
               ))}
@@ -507,9 +523,9 @@ export default function App() {
                 ) : (
                   <ShipmentDashboard
                     history={history}
-                    onStop={id => { stopShipment(id); toast.success('Shipment stopped.', { icon: '⏹️' }); }}
-                    onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.', { icon: '🗑️' }); }}
-                    onComplete={id => { completeShipment(id); toast.success('🏁 Delivery Successful!', { icon: '✅', duration: 4000 }); }}
+                    onStop={id => { stopShipment(id); toast.success('Shipment stopped.'); }}
+                    onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.'); }}
+                    onComplete={id => { completeShipment(id); toast.success('Delivery Successful!', { duration: 4000 }); }}
                   />
                 )}
               </motion.div>
@@ -520,7 +536,7 @@ export default function App() {
               <div className="two-col-grid">
                 <div className="card">
                   <div className="card-hdr">
-                    <div className="card-title"><div className="ct-icon">📦</div>Select Shipment</div>
+                    <div className="card-title"><div className="ct-icon"><Package size={13} color="#60a5fa" /></div>Select Shipment</div>
                   </div>
                   <ShipmentList shipments={shipments} selected={selected} onSelect={setSelected} />
                 </div>
@@ -533,7 +549,7 @@ export default function App() {
               <div className="two-col-grid">
                 <div className="card">
                   <div className="card-hdr">
-                    <div className="card-title"><div className="ct-icon">📦</div>Select Shipment</div>
+                    <div className="card-title"><div className="ct-icon"><Package size={13} color="#60a5fa" /></div>Select Shipment</div>
                   </div>
                   <ShipmentList shipments={shipments} selected={selected} onSelect={setSelected} />
                 </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { Rocket, Eye, EyeOff, AlertCircle, Loader2, LogIn } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -37,9 +38,11 @@ export default function LoginPage() {
             width: 52, height: 52, borderRadius: 16,
             background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 24, margin: '0 auto 14px',
+            margin: '0 auto 14px',
             boxShadow: '0 0 32px rgba(59,130,246,0.35)',
-          }}>🚀</div>
+          }}>
+            <Rocket size={24} color="#fff" strokeWidth={2} />
+          </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.02em' }}>
             SupplyChain
           </div>
@@ -120,9 +123,10 @@ export default function LoginPage() {
                     position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
                     background: 'none', border: 'none', cursor: 'pointer',
                     color: '#475569', fontSize: 16, padding: 0,
+                    display: 'flex', alignItems: 'center',
                   }}
                 >
-                  {showPass ? '🙈' : '👁️'}
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
@@ -134,7 +138,7 @@ export default function LoginPage() {
                 borderRadius: 8, padding: '10px 14px',
                 fontSize: 13, color: '#f87171', display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                ⚠️ {error}
+                <AlertCircle size={14} /> {error}
               </div>
             )}
 
@@ -154,9 +158,9 @@ export default function LoginPage() {
               }}
             >
               {loading ? (
-                <><span style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block' }}>⟳</span> Signing in…</>
+                <><Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} /> Signing in…</>
               ) : (
-                '→ Sign In'
+                <><LogIn size={15} /> Sign In</>
               )}
             </button>
           </form>

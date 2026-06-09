@@ -1,11 +1,25 @@
-import { weatherIcon, weatherColor } from '../utils';
+import { weatherColor } from '../utils';
+import {
+  AlertTriangle, AlertCircle, Info, Zap, Bot, ArrowLeftRight, CheckCircle,
+  CloudSun, CloudRain, Cloud, CloudLightning, Wind,
+} from 'lucide-react';
+
+function WeatherIcon({ w, size = 26 }) {
+  const props = { size, strokeWidth: 1.8 };
+  if (w === 'Rain' || w === 'Drizzle') return <CloudRain {...props} color="#60a5fa" />;
+  if (w === 'Cloudy' || w === 'Clouds') return <Cloud {...props} color="#94a3b8" />;
+  if (w === 'Storm' || w === 'Thunderstorm') return <CloudLightning {...props} color="#f87171" />;
+  if (w === 'Fog' || w === 'Mist' || w === 'Haze') return <Wind {...props} color="#a78bfa" />;
+  return <CloudSun {...props} color="#fcd34d" />;
+}
 
 function AlertItem({ alert }) {
   const cls  = alert.type === 'danger' ? 'alert-danger' : alert.type === 'warning' ? 'alert-warning' : 'alert-info';
-  const icon = alert.type === 'danger' ? '🚨' : alert.type === 'warning' ? '⚠️' : 'ℹ️';
+  const Icon = alert.type === 'danger' ? AlertTriangle : alert.type === 'warning' ? AlertCircle : Info;
+  const iconColor = alert.type === 'danger' ? '#f87171' : alert.type === 'warning' ? '#fcd34d' : '#60a5fa';
   return (
     <div className={cls} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-      <span style={{ fontSize: 13, flexShrink: 0 }}>{icon}</span>
+      <Icon size={13} color={iconColor} style={{ flexShrink: 0, marginTop: 1 }} />
       <span style={{ fontSize: 12, lineHeight: 1.5 }}>{alert.msg}</span>
     </div>
   );
@@ -91,7 +105,7 @@ export default function AlertsPanel({ env, alerts, shipments = [], speed = 0, is
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="card-hdr" style={{ marginBottom: 0 }}>
         <div className="card-title">
-          <div className="ct-icon">⚡</div>
+          <div className="ct-icon"><Zap size={13} color="#60a5fa" /></div>
           Live Conditions
         </div>
         {env.lastUpdated && (
@@ -106,7 +120,9 @@ export default function AlertsPanel({ env, alerts, shipments = [], speed = 0, is
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {/* Weather card */}
         <div className="card2" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 26, marginBottom: 4 }}>{weatherIcon(env.weather)}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+            <WeatherIcon w={env.weather} />
+          </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: weatherColor(env.weather) }}>
             {env.weather || 'Clear'}
           </div>
@@ -122,11 +138,13 @@ export default function AlertsPanel({ env, alerts, shipments = [], speed = 0, is
 
       {autoSwitched.length > 0 && (
         <>
-          <div className="sec-lbl">🤖 Auto-Decision Engine</div>
+          <div className="sec-lbl" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Bot size={11} /> Auto-Decision Engine
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {autoSwitched.map(s => (
               <div key={s.id} className="alert-warning" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 13, flexShrink: 0 }}>🔀</span>
+                <ArrowLeftRight size={13} color="#fcd34d" style={{ flexShrink: 0, marginTop: 1 }} />
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 700 }}>{s.id}</div>
                   <div style={{ fontSize: 11, marginTop: 1 }}>{s.autoSwitchReason}</div>
@@ -143,7 +161,7 @@ export default function AlertsPanel({ env, alerts, shipments = [], speed = 0, is
           ? alerts.map((a, i) => <AlertItem key={i} alert={a} />)
           : (
             <div style={{ fontSize: 12, color: 'var(--tx-3)', textAlign: 'center', padding: '10px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <span style={{ color: 'var(--green)' }}>✓</span> All routes clear
+              <CheckCircle size={13} color="var(--green)" /> All routes clear
             </div>
           )
         }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../api';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, Edit2, Check, X, UserCheck, UserX } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, UserCheck, UserX, Truck, Loader2, AlertCircle } from 'lucide-react';
 
 function useDrivers(token) {
   const [drivers, setDrivers] = useState([]);
@@ -40,7 +40,7 @@ function AddDriverModal({ token, onClose, onAdded }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast.success(`Driver ${form.name} added!`, { icon: '🚛' });
+      toast.success(`Driver ${form.name} added!`);
       onAdded();
       onClose();
     } catch (err) { setError(err.message); }
@@ -58,8 +58,8 @@ function AddDriverModal({ token, onClose, onAdded }) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>🚛 Add New Driver</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 18 }}>✕</button>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}><Truck size={16} color="#60a5fa" /> Add New Driver</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -85,8 +85,8 @@ function AddDriverModal({ token, onClose, onAdded }) {
           ))}
 
           {error && (
-            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#f87171' }}>
-              ⚠️ {error}
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#f87171', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <AlertCircle size={13} /> {error}
             </div>
           )}
 
@@ -96,7 +96,7 @@ function AddDriverModal({ token, onClose, onAdded }) {
             fontSize: 13, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
             fontFamily: 'inherit', opacity: loading ? 0.7 : 1,
           }}>
-            {loading ? '⟳ Creating…' : '+ Create Driver Account'}
+            {loading ? <><Loader2 size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> Creating…</> : <><Plus size={13} /> Create Driver Account</>}
           </button>
         </form>
       </div>
@@ -150,9 +150,9 @@ function DriverCard({ driver, token, onRefetch }) {
         width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
         background: driver.active ? 'rgba(34,197,94,0.15)' : 'rgba(100,116,139,0.15)',
         border: `2px solid ${driver.active ? 'rgba(34,197,94,0.3)' : 'rgba(100,116,139,0.2)'}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        🚛
+        <Truck size={18} color={driver.active ? '#4ade80' : '#64748b'} />
       </div>
 
       {/* Info */}
@@ -222,7 +222,9 @@ export default function DriversPage() {
       {/* Header */}
       <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--tx-1)' }}>🚛 Driver Management</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--tx-1)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Truck size={16} color="#60a5fa" /> Driver Management
+          </div>
           <div style={{ fontSize: 12, color: 'var(--tx-3)', marginTop: 3 }}>
             {drivers.length} driver{drivers.length !== 1 ? 's' : ''} · {drivers.filter(d => d.active).length} active
           </div>
@@ -243,12 +245,12 @@ export default function DriversPage() {
 
       {/* Driver list */}
       {loading ? (
-        <div className="card" style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--tx-3)' }}>
-          <div style={{ fontSize: 20, marginBottom: 8 }}>⟳</div>Loading drivers…
+        <div className="card" style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--tx-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <Loader2 size={18} style={{ animation: 'spin 0.9s linear infinite' }} /> Loading drivers…
         </div>
       ) : drivers.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--tx-3)' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🚛</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Truck size={40} color="#1e2d45" /></div>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>No drivers yet</div>
           <div style={{ fontSize: 12 }}>Add your first driver to get started</div>
         </div>

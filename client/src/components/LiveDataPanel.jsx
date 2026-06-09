@@ -1,8 +1,19 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { weatherIcon, weatherColor } from '../utils';
+import { weatherColor } from '../utils';
+import { Globe, RefreshCw, CloudSun, CloudRain, Cloud, CloudLightning, Wind, Info } from 'lucide-react';
 
 const API_URL = 'http://localhost:4000';
+
+function WeatherIcon({ condition, size = 34 }) {
+  const props = { size, strokeWidth: 1.6 };
+  const c = condition || '';
+  if (/rain|drizzle/i.test(c)) return <CloudRain {...props} color="#60a5fa" />;
+  if (/cloud/i.test(c)) return <Cloud {...props} color="#94a3b8" />;
+  if (/thunder|storm/i.test(c)) return <CloudLightning {...props} color="#f87171" />;
+  if (/fog|mist|haze|dust|smoke/i.test(c)) return <Wind {...props} color="#a78bfa" />;
+  return <CloudSun {...props} color="#fcd34d" />;
+}
 
 export default function LiveDataPanel({ env }) {
   const [refreshing, setRefreshing] = useState(false);
@@ -26,15 +37,16 @@ export default function LiveDataPanel({ env }) {
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="card-hdr" style={{ marginBottom: 0 }}>
         <div className="card-title">
-          <div className="ct-icon">🌐</div>
+          <div className="ct-icon"><Globe size={13} color="#60a5fa" /></div>
           Live Data Sources
         </div>
         <button
           className="btn-ghost"
-          style={{ fontSize: 11, padding: '5px 10px', opacity: refreshing ? 0.6 : 1 }}
+          style={{ fontSize: 11, padding: '5px 10px', opacity: refreshing ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 5 }}
           onClick={handleRefresh} disabled={refreshing}
         >
-          {refreshing ? <><span className="spin-anim">⟳</span> Refreshing</> : '🔄 Refresh'}
+          <RefreshCw size={12} style={refreshing ? { animation: 'spin 0.9s linear infinite' } : {}} />
+          {refreshing ? 'Refreshing' : 'Refresh'}
         </button>
       </div>
 
@@ -44,13 +56,13 @@ export default function LiveDataPanel({ env }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {[
-          { label: 'Weather API', status: apiStatus.weather, icon: '🌤️' },
-          { label: 'Traffic API', status: apiStatus.traffic, icon: '🚦' },
-        ].map(({ label, status, icon }) => {
+          { label: 'Weather API', status: apiStatus.weather, Icon: CloudSun },
+          { label: 'Traffic API', status: apiStatus.traffic, Icon: Globe },
+        ].map(({ label, status, Icon }) => {
           const isLive = status === 'live' || status === 'google';
           return (
             <div key={label} className="card2" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{icon}</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}><Icon size={20} color={isLive ? '#4ade80' : '#fcd34d'} /></div>
               <span className={`badge ${isLive ? 'badge-green' : 'badge-yellow'}`}>
                 {isLive ? 'LIVE' : 'HEURISTIC'}
               </span>
@@ -63,7 +75,7 @@ export default function LiveDataPanel({ env }) {
       <div className="card2">
         <div className="sec-lbl">Current Weather</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 34 }}>{weatherIcon(weatherData.condition)}</span>
+          <WeatherIcon condition={weatherData.condition} size={34} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: weatherColor(weatherData.condition) }}>
               {weatherData.condition || '—'}
@@ -98,7 +110,7 @@ export default function LiveDataPanel({ env }) {
           <div style={{ display: 'flex', gap: 8 }}>
             {weatherData.forecast.map((f, i) => (
               <div key={i} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: 18 }}>{weatherIcon(f.condition)}</div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}><WeatherIcon condition={f.condition} size={18} /></div>
                 <div style={{ fontSize: 10, color: weatherColor(f.condition), fontWeight: 600, marginTop: 2 }}>{f.condition}</div>
                 <div style={{ fontSize: 10, color: 'var(--tx-3)' }}>{f.time?.slice(11, 16) || `+${(i + 1) * 3}h`}</div>
               </div>
@@ -125,13 +137,14 @@ export default function LiveDataPanel({ env }) {
           <div className="risk-bar-fill" style={{ width: `${congPct}%`, background: congColor }} />
         </div>
         <div style={{ fontSize: 10, color: 'var(--tx-3)', marginTop: 6 }}>
-          Source: {trafficData.source === 'google' ? '✅ Google Maps API' : '⚠️ Time-of-day heuristic'}
+          Source: {trafficData.source === 'google' ? 'Google Maps API (Live)' : 'Time-of-day heuristic'}
         </div>
       </div>
 
       {(apiStatus.weather !== 'live' || apiStatus.traffic !== 'google') && (
-        <div className="alert-info" style={{ fontSize: 11 }}>
-          💡 Add <b>OPENWEATHER_API_KEY</b> and <b>GOOGLE_MAPS_API_KEY</b> to <code>server/.env</code> for fully live data.
+        <div className="alert-info" style={{ fontSize: 11, display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+          <Info size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>Add <b>OPENWEATHER_API_KEY</b> and <b>GOOGLE_MAPS_API_KEY</b> to <code>server/.env</code> for fully live data.</span>
         </div>
       )}
     </div>

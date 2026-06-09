@@ -1,0 +1,12 @@
+[
+  {
+    "id": "USR-001",
+    "name": "Admin",
+    "email": "admin@supplychain.com",
+    "password": "$2b$10$Lt9Rjy6t8sP5NPAN7Pzk2u0XFxl0XyMZHOl7hnX9mOVV9hkAKwNq6",
+    "role": "admin",
+    "phone": "",
+    "createdAt": "2026-04-19T10:58:02.136Z",
+    "active": true
+  }
+]
