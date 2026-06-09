@@ -127,8 +127,8 @@ export default function WeatherSegmentPanel({ weatherPoints, loading }) {
           const rInfo   = RISK[level.toUpperCase()] || RISK.SAFE;
           const numScore = risk?.numericScore || 0;
 
-          const etaDisp = wp.etaFormatted || (wp.etaMs
-            ? new Date(Date.now() + wp.etaMs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
+          const etaDisp = wp.etaFormatted
+            || (wp.etaTimestamp ? new Date(wp.etaTimestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
             : 'Now');
 
           const speedRedPct = Math.round((risk?.speedReduction || 0) * 100);

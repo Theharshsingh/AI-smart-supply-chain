@@ -59,8 +59,8 @@ export default function RouteWeatherOverlay({ weatherPoints }) {
         const risk   = wp.riskInfo;
         const radius = score >= 70 ? 12 : score >= 55 ? 10 : score >= 25 ? 8 : score >= 1 ? 6 : 4;
 
-        const etaDisplay = wp.etaFormatted || (wp.etaMs
-          ? new Date(Date.now() + wp.etaMs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
+        const etaDisplay = wp.etaFormatted
+          || (wp.etaTimestamp ? new Date(wp.etaTimestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
           : 'Now');
 
         const speedRedPct = Math.round((risk?.speedReduction || 0) * 100);
