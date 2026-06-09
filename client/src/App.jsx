@@ -119,6 +119,9 @@ export default function App() {
   const [tab, setTab]               = useState('plan');
   const [planResult, setPlanResult] = useState(null);
   const [weatherPoints, setWeatherPoints] = useState([]);
+  const [segments, setSegments] = useState([]);
+  const [adjustedDurationMin, setAdjustedDurationMin] = useState(null);
+  const [routesCongestion, setRoutesCongestion] = useState([]);
   const [dark, setDark]             = useState(false);
   const [navState, setNavState]     = useState({
     gpsPosition: null, isNavigating: false, liveRoute: null,
@@ -207,7 +210,7 @@ export default function App() {
   const liveMap = (
     <LiveMap
       shipments={[]} selected={selected} onSelect={setSelected}
-      planResult={planResult}
+      planResult={planResult ? { ...planResult, routesCongestion } : null}
       gpsPosition={navState.gpsPosition}
       isNavigating={navState.isNavigating}
       liveRoute={navState.liveRoute}
@@ -217,7 +220,9 @@ export default function App() {
       gpsError={navState.gpsError}
       onStopNavigation={navState.onStopNavigation}
       weatherPoints={weatherPoints}
+      segments={segments}
       driverShipments={user.role === 'admin' ? driverShipments : []}
+      adjustedDurationMin={adjustedDurationMin}
     />
   );
 
@@ -229,6 +234,11 @@ export default function App() {
       onStartShipment={handleStartShipment}
       onShipmentArrived={handleShipmentArrived}
       onWeatherUpdate={setWeatherPoints}
+      onSegmentsUpdate={setSegments}
+      onAdjustedDuration={(adjMin, congMap) => {
+        setAdjustedDurationMin(adjMin);
+        setRoutesCongestion(congMap || []);
+      }}
     />
   );
 

@@ -169,6 +169,11 @@ export default function WeatherSegmentPanel({ weatherPoints, loading }) {
                   {speedRedPct > 0 && (
                     <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600 }}>↓{speedRedPct}% speed</span>
                   )}
+                  {wp.traffic?.congestionPct > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: wp.traffic.congestionPct >= 60 ? '#ef4444' : wp.traffic.congestionPct >= 40 ? '#f97316' : '#eab308' }}>
+                      🚦{wp.traffic.congestionPct}% congestion
+                    </span>
+                  )}
                 </div>
               </div>
 

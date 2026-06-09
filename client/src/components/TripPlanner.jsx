@@ -9,6 +9,7 @@ import NavigationPanel from './NavigationPanel';
 import WeatherAlertBanner from './WeatherAlertBanner';
 import WeatherSegmentPanel from './WeatherSegmentPanel';
 import RouteAlternativePanel from './RouteAlternativePanel';
+import RouteDetailsPanel from './RouteDetailsPanel';
 import toast from 'react-hot-toast';
 import { Navigation2, Square, Package } from 'lucide-react';
 
@@ -253,7 +254,7 @@ function RouteCard({ route, selected, onSelect }) {
 }
 
 // ── Main TripPlanner ──────────────────────────────────────────────────────────
-export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShipment, onShipmentArrived, onWeatherUpdate }) {
+export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShipment, onShipmentArrived, onWeatherUpdate, onSegmentsUpdate, onAdjustedDuration }) {
   const [from, setFrom]   = useState({ text: '', placeId: null, lat: null, lon: null });
   const [to, setTo]       = useState({ text: '', placeId: null, lat: null, lon: null });
   const [errors, setErrors] = useState({});
@@ -265,7 +266,6 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
   const [osrmLoading, setOsrmLoading] = useState(false);
   const [tolls, setTolls] = useState([]);
   const [activeShipmentId, setActiveShipmentId] = useState(null);
-  const prevBestRef = useRef(null);
 
   const handleArrived = useCallback(() => {
     if (activeShipmentId) {
@@ -284,26 +284,37 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
   const currentDuration = osrmRoutes?.[selectedRouteIdx]?.durationMin ?? 0;
   const {
     weatherPoints, routeAlerts, routeAnalysis, loading: weatherLoading,
-    rerouteLoading, severeCount, moderateCount, lightCount,
+    rerouteLoading, severeCount, moderateCount, lightCount, segments,
   } = useRouteWeather(currentPolyline, currentDuration, osrmRoutes);
 
-  // Propagate weather points up to App → LiveMap
+  // Propagate weather points + segments up to App → LiveMap
   useEffect(() => {
     onWeatherUpdate?.(weatherPoints);
   }, [weatherPoints, onWeatherUpdate]);
 
-  // ── Live monitoring: toast if better weather route becomes available ────────────
   useEffect(() => {
-    if (!routeAnalysis) return;
-    const bestIdx = routeAnalysis.recommended ?? routeAnalysis.best?.recommended;
-    if (bestIdx == null) return;
-    if (prevBestRef.current !== null && bestIdx !== selectedRouteIdx && prevBestRef.current === selectedRouteIdx) {
-      toast('🌦 Better weather route available!', {
-        icon: '🔀', duration: 6000,
-        style: { background: '#0c1a3a', border: '1px solid #22c55e', color: '#f1f5f9' },
-      });
-    }
-    prevBestRef.current = bestIdx;
+    onSegmentsUpdate?.(segments || []);
+  }, [segments, onSegmentsUpdate]);
+
+  // Propagate adjusted duration + per-route congestion for map ETA + traffic coloring
+  useEffect(() => {
+    if (!routeAnalysis?.scoredAnalyses?.length) return;
+    const sel = routeAnalysis.scoredAnalyses[selectedRouteIdx] || routeAnalysis.scoredAnalyses[0];
+    const adjMin = sel?.adjustedDurationMin ?? null;
+    const congestionMap = routeAnalysis.scoredAnalyses.map(a => a.trafScore?.avgCongestion ?? null);
+    onAdjustedDuration?.(adjMin, congestionMap);
+  }, [routeAnalysis, selectedRouteIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Live monitoring: toast when 15%+ better route becomes available (STEP 8) ──
+  useEffect(() => {
+    if (!routeAnalysis?._betterRouteAvailable) return;
+    const bestIdx = routeAnalysis.recommended;
+    if (bestIdx == null || bestIdx === selectedRouteIdx) return;
+    const reason = routeAnalysis._betterReason || routeAnalysis.reason || '';
+    toast(
+      `🔀 Better route available — Switch to Route ${bestIdx + 1}\n${reason}`,
+      { icon: '🌦', duration: 8000, style: { background: '#0c1a3a', border: '1px solid #22c55e', color: '#f1f5f9' } }
+    );
   }, [routeAnalysis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stable key per route so WeatherAlertBanner resets on route change
@@ -620,6 +631,15 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
         />
       )}
 
+      {/* ── Route Details Panel (STEP 10) ── */}
+      {osrmRoutes?.length > 0 && routeAnalysis?.scoredAnalyses?.length > 0 && !result && (
+        <RouteDetailsPanel
+          routeAnalysis={routeAnalysis}
+          osrmRoutes={osrmRoutes}
+          selectedIdx={selectedRouteIdx}
+        />
+      )}
+
       {/* ── Route weather segment panel ── */}
       {(weatherPoints.length > 0 || weatherLoading) && !result && (
         <WeatherSegmentPanel
@@ -638,6 +658,9 @@ export default function TripPlanner({ onPlanResult, onNavStateChange, onStartShi
           isRerouting={isRerouting}
           distToNextTurn={distToNextTurn}
           onStop={stopNavigation}
+          adjustedDurationMin={
+            routeAnalysis?.scoredAnalyses?.[selectedRouteIdx]?.adjustedDurationMin ?? null
+          }
         />
       )}
 

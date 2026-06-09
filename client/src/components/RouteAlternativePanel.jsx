@@ -1,12 +1,13 @@
 import { motion } from 'framer-motion';
 import { RISK } from '../services/riskEngine';
+import { congestionColor } from '../services/trafficService';
 import { weatherRiskColor } from '../utils';
-import { Shield, Clock, Wind, Zap } from 'lucide-react';
+import { Clock, Wind, Zap } from 'lucide-react';
 
 function ScoreBar({ value, color }) {
   return (
-    <div style={{ background: '#1e2d45', borderRadius: 999, height: 4, overflow: 'hidden', marginTop: 3 }}>
-      <div style={{ height: '100%', width: `${Math.min(100, Math.round(value * 100))}%`, background: color, borderRadius: 999, transition: 'width 0.6s' }} />
+    <div style={{ background: '#1e2d45', borderRadius: 999, height: 3, overflow: 'hidden', marginTop: 2 }}>
+      <div style={{ height: '100%', width: `${Math.min(100, Math.round(Math.max(0, 1 - value) * 100))}%`, background: color, borderRadius: 999, transition: 'width 0.6s' }} />
     </div>
   );
 }
@@ -16,55 +17,51 @@ export default function RouteAlternativePanel({ routeAnalysis, rerouteLoading, s
     return (
       <div className="card2" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
         <span className="spin-anim" style={{ fontSize: 16 }}>⟳</span>
-        <span style={{ fontSize: 12, color: '#64748b' }}>Analysing routes for best weather score…</span>
+        <span style={{ fontSize: 12, color: '#64748b' }}>Analysing traffic + weather for all routes…</span>
       </div>
     );
   }
 
-  const analyses = routeAnalysis?.scoredAnalyses || routeAnalysis?.analyses;
-  if (!analyses?.length || analyses.length < 2) return null;
+  const analyses = routeAnalysis?.scoredAnalyses;
+  if (!analyses?.length) return null;
 
-  const { best, reason, timeDiffMin, riskImprovement } = routeAnalysis;
-  const bestIdx = best?.recommended ?? routeAnalysis?.best?.recommended;
-  const isBetterAvailable = bestIdx != null && bestIdx !== selectedIdx;
+  const { recommended, reason, timeDiffMin, riskImprovement, _betterRouteAvailable } = routeAnalysis;
+  const isBetterAvailable = _betterRouteAvailable || (recommended != null && recommended !== selectedIdx);
 
   return (
-    <motion.div
-      className="card"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+    <motion.div className="card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
         <span style={{ fontSize: 16 }}>🔀</span>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>Weather-Aware Route Comparison</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>Traffic + Weather Route Comparison</div>
           {isBetterAvailable && (
             <div style={{ fontSize: 11, color: '#4ade80', marginTop: 2, fontWeight: 600 }}>
-              💡 Better weather route available — {reason}
+              💡 Better route available — {reason}
             </div>
           )}
         </div>
-        {/* Weight legend */}
-        <div style={{ fontSize: 9, color: '#334155', textAlign: 'right', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 9, color: '#334155', textAlign: 'right', lineHeight: 1.7 }}>
           <div>⏱ 40% Time</div>
           <div>🌦 35% Weather</div>
-          <div>🛡 25% Safety</div>
+          <div>🚦 25% Traffic</div>
         </div>
       </div>
 
-      {/* Route cards */}
+      {/* Route rows */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {analyses.map((a, idx) => {
-          const score      = a.weatherScore;
+          const wxScore   = a.wxScore    || a.weatherScore || {};
+          const trafScore = a.trafScore  || {};
           const isSelected = idx === selectedIdx;
-          const isBest     = idx === bestIdx;
-          const maxRisk    = RISK[(score.maxLevel || 'safe').toUpperCase()] || RISK.SAFE;
-          const color      = weatherRiskColor(score.maxLevel);
-          const composite  = a.compositeScore;
-          const delay      = (a.adjustedDurationMin || a.durationMin) - (a.durationMin || 0);
-          const speedPct   = Math.round((score.avgSpeedReduction || 0) * 100);
+          const isBest     = idx === recommended;
+          const composite  = a.compositeScore ?? 0;
+          const wxColor    = weatherRiskColor(wxScore.maxLevel || 'safe');
+          const trafClr    = congestionColor(trafScore.avgCongestion || 0);
+          const trafficDelay = a.trafficDelayMin || 0;
+          const weatherDelay = a.weatherDelayMin || 0;
 
           return (
             <button
@@ -81,7 +78,7 @@ export default function RouteAlternativePanel({ routeAnalysis, rerouteLoading, s
               onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = '#2d3f5c'; }}
               onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = '#1e2d45'; }}
             >
-              {/* Route number */}
+              {/* Number circle */}
               <div style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                 background: isSelected ? '#1e40af' : '#1a2235',
@@ -92,78 +89,66 @@ export default function RouteAlternativePanel({ routeAnalysis, rerouteLoading, s
                 {idx + 1}
               </div>
 
-              {/* Info block */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Recommendation label */}
+                {/* Label */}
                 {a.recommendation && (
                   <div style={{ fontSize: 10, fontWeight: 700, color: isBest ? '#4ade80' : '#64748b', marginBottom: 4 }}>
                     {a.recommendation}
                   </div>
                 )}
 
-                {/* Time row */}
-                <div style={{ fontSize: 11, color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+                {/* Time + delays */}
+                <div style={{ fontSize: 11, color: '#94a3b8', display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 5 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                     <Clock size={9} /> {a.durationMin} min
                   </span>
-                  {delay > 0 && (
-                    <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <Wind size={9} /> +{delay}m weather delay
-                    </span>
+                  {trafficDelay > 0 && (
+                    <span style={{ color: trafClr, fontSize: 10 }}>🚦 +{trafficDelay}m traffic</span>
                   )}
-                  {speedPct > 0 && (
-                    <span style={{ color: '#f87171', fontSize: 10 }}>↓{speedPct}% speed</span>
+                  {weatherDelay > 0 && (
+                    <span style={{ color: wxColor, fontSize: 10 }}>🌦 +{weatherDelay}m weather</span>
                   )}
-                  <span>📍 {a.distanceKm} km</span>
+                  <span style={{ color: '#475569' }}>📍 {a.distanceKm} km</span>
                 </div>
 
-                {/* Risk badges */}
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                  {score.highCount > 0 && (
+                {/* Traffic + Weather badges */}
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 5 }}>
+                  {/* Traffic */}
+                  <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: trafClr + '22', color: trafClr, fontWeight: 700, border: `1px solid ${trafClr}44` }}>
+                    🚦 {trafScore.avgCongestion || 0}% congestion
+                  </span>
+                  {trafScore.maxCongestion >= 60 && (
+                    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: '#450a0a', color: '#f87171', fontWeight: 700 }}>
+                      ⚠ {trafScore.maxCongestion}% peak
+                    </span>
+                  )}
+                  {/* Weather */}
+                  {wxScore.highCount > 0 && (
                     <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: RISK.HIGH.darkBg, color: RISK.HIGH.color, fontWeight: 700 }}>
-                      🚨 {score.highCount} high
+                      🚨 {wxScore.highCount} wx-high
                     </span>
                   )}
-                  {score.mediumCount > 0 && (
+                  {wxScore.mediumCount > 0 && (
                     <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: RISK.MEDIUM.darkBg, color: RISK.MEDIUM.color, fontWeight: 700 }}>
-                      ⚠️ {score.mediumCount} medium
+                      ⚠️ {wxScore.mediumCount} wx-mod
                     </span>
                   )}
-                  {score.lightCount > 0 && (
-                    <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: RISK.LIGHT.darkBg, color: RISK.LIGHT.color, fontWeight: 700 }}>
-                      ⚡ {score.lightCount} light
-                    </span>
-                  )}
-                  {score.totalScore === 0 && (
+                  {wxScore.totalScore === 0 && trafScore.avgCongestion < 20 && (
                     <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: RISK.SAFE.darkBg, color: RISK.SAFE.color, fontWeight: 700 }}>
                       ✅ Clear
                     </span>
                   )}
                 </div>
 
-                {/* Composite score bar */}
-                {composite != null && (
-                  <div style={{ marginTop: 6 }}>
-                    <div style={{ fontSize: 9, color: '#334155', marginBottom: 1, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Route Score</span>
-                      <span style={{ color: isBest ? '#4ade80' : '#64748b' }}>{(composite * 100).toFixed(0)}/100 {isBest ? '(best)' : ''}</span>
-                    </div>
-                    <ScoreBar value={1 - composite} color={isBest ? '#22c55e' : '#334155'} />
+                {/* Score bar */}
+                <div style={{ marginTop: 2 }}>
+                  <div style={{ fontSize: 9, color: '#334155', display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+                    <span>Combined Score</span>
+                    <span style={{ color: isBest ? '#4ade80' : '#64748b' }}>
+                      {Math.round((1 - composite) * 100)}/100 {isBest ? '★' : ''}
+                    </span>
                   </div>
-                )}
-              </div>
-
-              {/* Right: max risk + score */}
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{
-                  fontSize: 9, fontWeight: 800, padding: '3px 7px', borderRadius: 4,
-                  background: color + '22', color,
-                  textTransform: 'uppercase', letterSpacing: '0.06em',
-                }}>
-                  {maxRisk.label}
-                </div>
-                <div style={{ fontSize: 9, color: '#475569', marginTop: 3 }}>
-                  Risk: {score.totalScore}pts
+                  <ScoreBar value={composite} color={isBest ? '#22c55e' : '#334155'} />
                 </div>
               </div>
 
@@ -175,7 +160,7 @@ export default function RouteAlternativePanel({ routeAnalysis, rerouteLoading, s
                   color: '#fff', fontSize: 8, fontWeight: 800,
                   padding: '2px 7px', borderRadius: 999,
                 }}>
-                  ★ BEST SCORE
+                  ★ BEST ROUTE
                 </div>
               )}
             </button>
@@ -183,14 +168,14 @@ export default function RouteAlternativePanel({ routeAnalysis, rerouteLoading, s
         })}
       </div>
 
-      {/* Time impact footer */}
+      {/* Footer */}
       {isBetterAvailable && timeDiffMin != null && (
         <div style={{ fontSize: 11, color: '#64748b', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           {timeDiffMin > 0
-            ? `⏱ Safest route adds ${timeDiffMin} min`
+            ? `⏱ Best route adds ${timeDiffMin} min`
             : timeDiffMin < 0
-              ? `⚡ Safest route also saves ${Math.abs(timeDiffMin)} min`
-              : '⏱ Same travel time — better weather'}
+              ? `⚡ Best route saves ${Math.abs(timeDiffMin)} min`
+              : '⏱ Same time — better conditions'}
           {riskImprovement && ` · ${riskImprovement}`}
         </div>
       )}

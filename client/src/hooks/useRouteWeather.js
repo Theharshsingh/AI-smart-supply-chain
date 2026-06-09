@@ -1,60 +1,51 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { sampleRoutePoints } from '../services/routeProcessor';
-import { fetchWeatherForRoute } from '../services/weatherService';
-import { addEtaTimestamps } from '../services/etaCalculator';
-import { classifyRisk, buildRouteAlerts, routeWeatherScore } from '../services/riskEngine';
-import { analyzeRoutes, getBestRoute } from '../services/reroutingEngine';
+import { analyzeRoutes }    from '../services/routeAnalyzer';
+import { scoreRoutes }      from '../services/routeScorer';
+import { buildRouteAlerts } from '../services/riskEngine';
 
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — live monitoring per spec
+const REFRESH_MS       = 5 * 60 * 1000; // 5 min live monitoring
+const REROUTE_THRESHOLD = 0.15;          // 15% score improvement triggers notification
 
-/**
- * useRouteWeather
- * Monitors live + future weather conditions along a route polyline.
- * Supports alternative route comparison and auto-refresh.
- *
- * @param {Array<{lat,lng}>|null} polyline          – selected route polyline
- * @param {number}                durationMin       – selected route duration
- * @param {Array|null}            allRoutes         – all OSRM alternative routes (for rerouting)
- * @param {number}                departureTime     – Unix ms, default: Date.now()
- */
 export function useRouteWeather(polyline, durationMin = 0, allRoutes = null, departureTime = null) {
-  const [weatherPoints, setWeatherPoints] = useState([]);
-  const [routeAlerts, setRouteAlerts]     = useState([]);
-  const [routeAnalysis, setRouteAnalysis] = useState(null);   // alternative route analysis
-  const [loading, setLoading]             = useState(false);
-  const [rerouteLoading, setRerouteLoading] = useState(false);
-  const [error, setError]                 = useState(null);
+  const [segments,      setSegments]      = useState([]);   // enriched per-point data (traffic+weather)
+  const [weatherPoints, setWeatherPoints] = useState([]);   // compat alias → same as segments
+  const [routeAlerts,   setRouteAlerts]   = useState([]);
+  const [routeAnalysis, setRouteAnalysis] = useState(null);
+  const [loading,       setLoading]       = useState(false);
+  const [rerouteLoading,setRerouteLoading]= useState(false);
+  const [error,         setError]         = useState(null);
 
-  const timerRef       = useRef(null);
-  const polylineKeyRef = useRef(null);
-  const departRef      = useRef(departureTime ?? Date.now());
+  const timerRef        = useRef(null);
+  const polylineKeyRef  = useRef(null);
+  const departRef       = useRef(departureTime ?? Date.now());
+  const prevScoreRef    = useRef(null);  // track score changes for reroute notification
 
-  // Keep departure time stable (use "now" if not provided, update only when set explicitly)
   useEffect(() => {
     if (departureTime) departRef.current = departureTime;
   }, [departureTime]);
 
-  // ── Primary route weather fetch ───────────────────────────────────────────
-  const fetchWeather = useCallback(async (pl, durMin) => {
-    if (!pl?.length) { setWeatherPoints([]); setRouteAlerts([]); return; }
+  // ── Fetch selected route segments (traffic + weather) ────────────────────
+  const fetchSegments = useCallback(async (pl, durMin) => {
+    if (!pl?.length) { setSegments([]); setWeatherPoints([]); setRouteAlerts([]); return; }
     setLoading(true);
     setError(null);
     try {
-      const durationMs = (durMin || 0) * 60 * 1000;
-      const sampled    = sampleRoutePoints(pl, durationMs, 14, 5);
-      const withEta    = addEtaTimestamps(sampled, departRef.current);
-      const points     = await fetchWeatherForRoute(withEta);
+      const route   = { polyline: pl, durationMin: durMin, distanceKm: 0, routeIndex: 0 };
+      const analysis = await analyzeRoutes([route], departRef.current);
+      const segs    = analysis[0]?.segments || [];
 
-      // Enrich each point with classified risk
-      const enriched = points.map(pt => ({
-        ...pt,
-        riskInfo: classifyRisk(pt.weather),
+      // build weatherPoints-compatible shape (existing components expect .weather + .riskInfo)
+      const enriched = segs.map(s => ({
+        ...s,
+        riskInfo: s.wxRisk,
       }));
 
+      setSegments(enriched);
       setWeatherPoints(enriched);
       setRouteAlerts(buildRouteAlerts(enriched));
-    } catch {
-      setError('Failed to fetch route weather');
+    } catch (e) {
+      setError('Failed to fetch route analysis');
+      setSegments([]);
       setWeatherPoints([]);
       setRouteAlerts([]);
     } finally {
@@ -62,14 +53,24 @@ export function useRouteWeather(polyline, durationMin = 0, allRoutes = null, dep
     }
   }, []);
 
-  // ── Alternative routes analysis ───────────────────────────────────────────
-  const fetchRerouteAnalysis = useCallback(async (routes) => {
-    if (!routes?.length || routes.length < 2) { setRouteAnalysis(null); return; }
+  // ── Analyze all routes + score them ──────────────────────────────────────
+  const fetchAllRoutes = useCallback(async (routes, currentIdx) => {
+    if (!routes?.length || routes.length < 1) { setRouteAnalysis(null); return; }
     setRerouteLoading(true);
     try {
       const analyses = await analyzeRoutes(routes, departRef.current);
-      const bestResult = getBestRoute(analyses, 0);
-      setRouteAnalysis({ ...bestResult, analyses: bestResult.scoredAnalyses || analyses });
+      const scored   = scoreRoutes(analyses, currentIdx ?? 0);
+
+      // Check 15% reroute threshold
+      if (prevScoreRef.current !== null && scored.recommended !== (currentIdx ?? 0)) {
+        const improvement = scored.improvementPct || 0;
+        if (improvement >= REROUTE_THRESHOLD * 100) {
+          scored._betterRouteAvailable = true;
+          scored._betterReason         = scored.reason;
+        }
+      }
+      prevScoreRef.current = scored.recommended;
+      setRouteAnalysis(scored);
     } catch {
       setRouteAnalysis(null);
     } finally {
@@ -77,7 +78,7 @@ export function useRouteWeather(polyline, durationMin = 0, allRoutes = null, dep
     }
   }, []);
 
-  // ── Main effect — react to polyline changes ───────────────────────────────
+  // ── Main effect ───────────────────────────────────────────────────────────
   useEffect(() => {
     const key = polyline?.length
       ? `${polyline[0]?.lat},${polyline[polyline.length - 1]?.lat},${polyline.length}`
@@ -85,49 +86,51 @@ export function useRouteWeather(polyline, durationMin = 0, allRoutes = null, dep
 
     if (key === polylineKeyRef.current) return;
     polylineKeyRef.current = key;
-
     clearInterval(timerRef.current);
 
     if (!polyline?.length) {
-      setWeatherPoints([]);
-      setRouteAlerts([]);
-      setRouteAnalysis(null);
+      setSegments([]); setWeatherPoints([]); setRouteAlerts([]); setRouteAnalysis(null);
       setLoading(false);
       return;
     }
 
     departRef.current = departureTime ?? Date.now();
 
-    fetchWeather(polyline, durationMin);
-    if (allRoutes?.length > 1) fetchRerouteAnalysis(allRoutes);
+    fetchSegments(polyline, durationMin);
+    fetchAllRoutes(allRoutes?.length ? allRoutes : [{ polyline, durationMin, distanceKm: 0 }], 0);
 
     timerRef.current = setInterval(() => {
-      departRef.current = Date.now();   // update departure time on refresh
-      fetchWeather(polyline, durationMin);
-      if (allRoutes?.length > 1) fetchRerouteAnalysis(allRoutes);
-    }, REFRESH_INTERVAL_MS);
+      departRef.current = Date.now();
+      fetchSegments(polyline, durationMin);
+      fetchAllRoutes(allRoutes?.length ? allRoutes : [{ polyline, durationMin, distanceKm: 0 }], 0);
+    }, REFRESH_MS);
 
     return () => clearInterval(timerRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polyline, durationMin, allRoutes, fetchWeather, fetchRerouteAnalysis]);
+  }, [polyline, durationMin, allRoutes]);
 
-  // ── Derived counts ────────────────────────────────────────────────────────
-  const score       = routeWeatherScore(weatherPoints);
-  const severeCount = score.highCount;       // backward compat alias
-  const moderateCount = score.mediumCount;
+  // ── Derived counts (backward compat) ─────────────────────────────────────
+  const wxCounts = segments.reduce(
+    (acc, s) => {
+      const k = s.wxRisk?.key || s.riskInfo?.key || 'safe';
+      if (k === 'high' || k === 'severe') acc.high++;
+      else if (k === 'medium') acc.medium++;
+      else if (k === 'light')  acc.light++;
+      return acc;
+    },
+    { high: 0, medium: 0, light: 0 }
+  );
 
   return {
-    weatherPoints,
+    segments,
+    weatherPoints,     // compat
     routeAlerts,
     routeAnalysis,
     loading,
     rerouteLoading,
     error,
-    hasRisk:      score.maxLevel !== 'safe',
-    hasSevere:    score.highCount > 0,
-    severeCount,
-    moderateCount,
-    lightCount:   score.lightCount,
-    weatherScore: score,
+    severeCount:   wxCounts.high,
+    moderateCount: wxCounts.medium,
+    lightCount:    wxCounts.light,
   };
 }

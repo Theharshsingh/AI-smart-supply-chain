@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import { riskColor } from '../utils';
 import RouteWeatherOverlay from './RouteWeatherOverlay';
+import TrafficWeatherOverlay from './TrafficWeatherOverlay';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -164,7 +165,7 @@ function NavFullscreenController({ isNavigating }) {
 }
 
 // ── Google Maps–style navigation HUD overlaid on the map ─────────────────────
-function NavHUD({ isNavigating, liveRoute, currentStepIndex, distToNextTurn, gpsPosition, gpsError, isRerouting, onStop }) {
+function NavHUD({ isNavigating, liveRoute, currentStepIndex, distToNextTurn, gpsPosition, gpsError, isRerouting, onStop, adjustedDurationMin }) {
   const map = useMap();
   if (!isNavigating) return null;
 
@@ -177,6 +178,13 @@ function NavHUD({ isNavigating, liveRoute, currentStepIndex, distToNextTurn, gps
     (acc, s) => ({ dist: acc.dist + s.distance, dur: acc.dur + s.duration }),
     { dist: 0, dur: 0 }
   );
+
+  // Use traffic+weather adjusted ETA; fall back to raw OSRM if not available
+  const totalStepsDur  = steps.reduce((a, s) => a + s.duration, 0);
+  const completedDur   = steps.slice(0, currentStepIndex).reduce((a, s) => a + s.duration, 0);
+  const completedFrac  = totalStepsDur > 0 ? completedDur / totalStepsDur : 0;
+  const adjTotalSec    = adjustedDurationMin != null ? adjustedDurationMin * 60 : totalStepsDur;
+  const adjRemainSec   = Math.round(adjTotalSec * (1 - completedFrac));
 
   const liveLabel = distToNextTurn != null
     ? `in ${fmtNavDist(distToNextTurn)}`
@@ -286,7 +294,7 @@ function NavHUD({ isNavigating, liveRoute, currentStepIndex, distToNextTurn, gps
             <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>Remaining</div>
           </div>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#22c55e', lineHeight: 1 }}>{fmtNavDur(remaining.dur)}</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#22c55e', lineHeight: 1 }}>{fmtNavDur(adjRemainSec)}</div>
             <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>ETA</div>
           </div>
         </div>
@@ -561,7 +569,8 @@ export default function LiveMap({
   shipments, selected, onSelect, planResult,
   gpsPosition, isNavigating, liveRoute,
   currentStepIndex, distToNextTurn, isRerouting, gpsError, onStopNavigation,
-  weatherPoints, driverShipments = [],
+  weatherPoints, segments, driverShipments = [],
+  adjustedDurationMin,
 }) {
   const [recenterLocation, setRecenterLocation] = useState(null);
   const tolls = planResult?.tolls || [];
@@ -587,6 +596,7 @@ export default function LiveMap({
         gpsError={gpsError}
         isRerouting={isRerouting}
         onStop={onStopNavigation}
+        adjustedDurationMin={adjustedDurationMin}
       />
       <FullscreenControl />
       <RecenterControl onLocationFound={setRecenterLocation} />
@@ -597,7 +607,10 @@ export default function LiveMap({
         isNavigating={isNavigating}
       />
 
-      {/* ── Route weather overlay ── */}
+      {/* ── Traffic + Weather overlay (new) ── */}
+      <TrafficWeatherOverlay segments={segments} />
+
+      {/* ── Route weather overlay (legacy weather-only) ── */}
       <RouteWeatherOverlay weatherPoints={weatherPoints} />
 
       {/* ── Plan result overlay ── */}
@@ -614,31 +627,62 @@ export default function LiveMap({
             </Marker>
           )}
 
-          {/* OSRM / Directions polylines — highlight selected, dim others */}
+          {/* OSRM / Directions polylines — selected route painted by traffic color, others dimmed */}
           {planResult.directionsData?.map((route, i) => {
             const ROUTE_COLORS = ['#1d4ed8', '#dc2626', '#15803d', '#b45309'];
             const selIdx = planResult.selectedRouteIdx ?? 0;
             const isSelected = i === selIdx;
-            const color = ROUTE_COLORS[i] || '#334155';
+            const fallbackColor = ROUTE_COLORS[i] || '#334155';
+
+            // For selected route: paint each segment by traffic congestion color
+            if (isSelected && segments?.length > 1) {
+              return (
+                <Fragment key={i}>
+                  {segments.map((seg, si) => {
+                    if (si === 0) return null;
+                    const prev = segments[si - 1];
+                    const congPct = seg.traffic?.congestionPct ?? 0;
+                    const color = congPct >= 80 ? '#7f1d1d'
+                      : congPct >= 60 ? '#ef4444'
+                      : congPct >= 40 ? '#f97316'
+                      : congPct >= 20 ? '#eab308'
+                      : '#22c55e';
+                    return (
+                      <Polyline
+                        key={`tr-${si}`}
+                        positions={[[prev.lat, prev.lng], [seg.lat, seg.lng]]}
+                        pathOptions={{ color, weight: 8, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }}
+                      />
+                    );
+                  })}
+                </Fragment>
+              );
+            }
+
+            // Non-selected routes — show with dash + route color, dimmed
+            const congestion = planResult.routesCongestion?.[i];
             return (
               <Polyline key={i}
                 positions={route.polyline.map(p => [p.lat, p.lng])}
                 pathOptions={{
-                  color,
-                  weight: isSelected ? 8 : 4,
-                  opacity: isSelected ? 1 : 0.45,
-                  dashArray: isSelected ? null : '10 6',
+                  color: fallbackColor,
+                  weight: 4,
+                  opacity: 0.38,
+                  dashArray: '10 6',
                   lineCap: 'round',
                   lineJoin: 'round',
                 }}
               >
-                {isSelected && (
-                  <Popup>
-                    <div style={{ color: '#111', fontWeight: 600, fontSize: 13 }}>
-                      🛣️ {route.distanceKm} km · {route.durationMin} min
-                    </div>
-                  </Popup>
-                )}
+                <Popup>
+                  <div style={{ color: '#111', fontWeight: 600, fontSize: 12 }}>
+                    Route {i + 1}: {route.distanceKm} km · {route.durationMin} min
+                    {congestion != null && (
+                      <div style={{ marginTop: 4, color: congestion >= 60 ? '#dc2626' : congestion >= 40 ? '#d97706' : '#16a34a', fontWeight: 700 }}>
+                        🚦 {congestion}% congestion — click to switch
+                      </div>
+                    )}
+                  </div>
+                </Popup>
               </Polyline>
             );
           })}

@@ -122,6 +122,7 @@ export default function NavigationPanel({
   isRerouting,
   distToNextTurn,
   onStop,
+  adjustedDurationMin,
 }) {
   const steps = liveRoute?.steps || [];
   const currentStep = steps[currentStepIndex];
@@ -129,11 +130,18 @@ export default function NavigationPanel({
   const stepsLeft = steps.length - currentStepIndex - 1;
   const arrived = currentStep?.maneuverType === 'arrive';
 
-  // Remaining distance / duration from current step onwards
   const remaining = steps.slice(currentStepIndex).reduce(
     (acc, s) => ({ dist: acc.dist + s.distance, dur: acc.dur + s.duration }),
     { dist: 0, dur: 0 }
   );
+
+  // Adjusted ETA: scale remaining by traffic+weather factor
+  const totalStepsDur = steps.reduce((a, s) => a + s.duration, 0);
+  const completedFrac = totalStepsDur > 0
+    ? steps.slice(0, currentStepIndex).reduce((a, s) => a + s.duration, 0) / totalStepsDur
+    : 0;
+  const adjTotalSec  = adjustedDurationMin != null ? adjustedDurationMin * 60 : totalStepsDur;
+  const adjRemainSec = Math.round(adjTotalSec * (1 - completedFrac));
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: 0, overflow: 'hidden' }}>
@@ -225,7 +233,7 @@ export default function NavigationPanel({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #1e2d45' }}>
         {[
           { label: 'Remaining', value: fmtDist(remaining.dist), color: '#f1f5f9' },
-          { label: 'ETA', value: fmtDur(remaining.dur), color: '#22c55e' },
+          { label: 'ETA', value: fmtDur(adjRemainSec), color: '#22c55e' },
           { label: 'Steps left', value: stepsLeft, color: '#60a5fa' },
         ].map(item => (
           <div key={item.label} style={{ padding: '8px 0', textAlign: 'center', borderRight: '1px solid #1e2d45' }}>
