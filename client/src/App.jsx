@@ -468,7 +468,7 @@ export default function App() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <LiveDataPanel env={env} />
                         <AlertsPanel env={env} alerts={alerts} shipments={shipments} speed={0} isNavigating={false} />
-                        <RiskChart shipments={shipments} />
+                        <RiskChart shipments={shipments} env={env} />
                       </div>
                     )}
                   </motion.div>
@@ -576,7 +576,7 @@ export default function App() {
                 <LiveDataPanel env={env} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <AlertsPanel env={env} alerts={alerts} shipments={shipments} speed={0} isNavigating={false} />
-                  <RiskChart shipments={shipments} />
+                  <RiskChart shipments={shipments} env={env} />
                 </div>
               </div>
             )}
