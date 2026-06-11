@@ -1,47 +1,26 @@
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const fs = require('fs');
-const path = require('path');
+const jwt    = require('jsonwebtoken');
+const { User } = require('./models');
 
-const DB_FILE = path.join(__dirname, 'users.json');
-const JWT_SECRET = process.env.JWT_SECRET || 'supplychain_secret_2024_change_in_production';
+const JWT_SECRET  = process.env.JWT_SECRET || 'supplychain_secret_2024_change_in_production';
 const JWT_EXPIRES = '7d';
 
-// ── Load / Save users DB ──────────────────────────────────────────────────────
-function loadUsers() {
-  try {
-    if (!fs.existsSync(DB_FILE)) return [];
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-  } catch { return []; }
-}
-
-function saveUsers(users) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(users, null, 2));
-}
-
-// ── Seed default admin if no users exist ─────────────────────────────────────
-function seedDefaultUsers() {
-  const users = loadUsers();
-  if (users.length === 0) {
-    const hashed = bcrypt.hashSync('admin123', 10);
-    const defaultUsers = [
-      {
-        id: 'USR-001',
-        name: 'Admin',
-        email: 'admin@supplychain.com',
-        password: hashed,
-        role: 'admin',
-        phone: '',
-        createdAt: new Date().toISOString(),
-        active: true,
-      }
-    ];
-    saveUsers(defaultUsers);
+async function seedDefaultUsers() {
+  const count = await User.countDocuments();
+  if (count === 0) {
+    await User.create({
+      id:       'USR-001',
+      name:     'Admin',
+      email:    'admin@supplychain.com',
+      password: bcrypt.hashSync('admin123', 10),
+      role:     'admin',
+      phone:    '',
+      active:   true,
+    });
     console.log('[Auth] Default admin created: admin@supplychain.com / admin123');
   }
 }
 
-// ── Generate JWT ──────────────────────────────────────────────────────────────
 function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role, name: user.name },
@@ -50,120 +29,69 @@ function generateToken(user) {
   );
 }
 
-// ── Verify JWT middleware ─────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+  if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token provided' });
   try {
-    const token = header.split(' ')[1];
-    req.user = jwt.verify(token, JWT_SECRET);
+    req.user = jwt.verify(header.split(' ')[1], JWT_SECRET);
     next();
   } catch {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
-// ── Admin only middleware ─────────────────────────────────────────────────────
 function adminOnly(req, res, next) {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
   next();
 }
 
-// ── Auth Routes ───────────────────────────────────────────────────────────────
 function registerAuthRoutes(app) {
-
-  // POST /api/auth/login
-  app.post('/api/auth/login', (req, res) => {
+  app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-
-    const users = loadUsers();
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (!user) return res.status(401).json({ error: 'Invalid email or password' });
-    if (!user.active) return res.status(403).json({ error: 'Account is deactivated' });
-
-    const valid = bcrypt.compareSync(password, user.password);
-    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
-
-    const token = generateToken(user);
-    res.json({
-      token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone },
-    });
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || !user.active) return res.status(401).json({ error: 'Invalid email or password' });
+    if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid email or password' });
+    res.json({ token: generateToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone } });
   });
 
-  // POST /api/auth/register-driver  (admin only)
-  app.post('/api/auth/register-driver', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/auth/register-driver', authMiddleware, adminOnly, async (req, res) => {
     const { name, email, password, phone } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, password required' });
-
-    const users = loadUsers();
-    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-      return res.status(409).json({ error: 'Email already exists' });
-    }
-
-    const newDriver = {
-      id: `DRV-${Date.now()}`,
-      name,
-      email,
-      password: bcrypt.hashSync(password, 10),
-      role: 'driver',
-      phone: phone || '',
-      createdAt: new Date().toISOString(),
-      active: true,
-    };
-
-    users.push(newDriver);
-    saveUsers(users);
-
-    res.json({ message: 'Driver created', driver: { id: newDriver.id, name, email, role: 'driver', phone } });
+    if (await User.findOne({ email: email.toLowerCase() })) return res.status(409).json({ error: 'Email already exists' });
+    const driver = await User.create({
+      id: `DRV-${Date.now()}`, name, email, phone: phone || '',
+      password: bcrypt.hashSync(password, 10), role: 'driver', active: true,
+    });
+    res.json({ message: 'Driver created', driver: { id: driver.id, name, email, role: 'driver', phone } });
   });
 
-  // GET /api/auth/me  — verify token + get current user
-  app.get('/api/auth/me', authMiddleware, (req, res) => {
-    const users = loadUsers();
-    const user = users.find(u => u.id === req.user.id);
+  app.get('/api/auth/me', authMiddleware, async (req, res) => {
+    const user = await User.findOne({ id: req.user.id });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone });
   });
 
-  // GET /api/auth/drivers  (admin only)
-  app.get('/api/auth/drivers', authMiddleware, adminOnly, (req, res) => {
-    const users = loadUsers();
-    const drivers = users
-      .filter(u => u.role === 'driver')
-      .map(u => ({ id: u.id, name: u.name, email: u.email, phone: u.phone, active: u.active, createdAt: u.createdAt }));
+  app.get('/api/auth/drivers', authMiddleware, adminOnly, async (req, res) => {
+    const drivers = await User.find({ role: 'driver' }, 'id name email phone active createdAt');
     res.json(drivers);
   });
 
-  // PATCH /api/auth/drivers/:id  (admin only — toggle active, update info)
-  app.patch('/api/auth/drivers/:id', authMiddleware, adminOnly, (req, res) => {
-    const users = loadUsers();
-    const idx = users.findIndex(u => u.id === req.params.id && u.role === 'driver');
-    if (idx === -1) return res.status(404).json({ error: 'Driver not found' });
-
+  app.patch('/api/auth/drivers/:id', authMiddleware, adminOnly, async (req, res) => {
     const { name, phone, active, password } = req.body;
-    if (name !== undefined) users[idx].name = name;
-    if (phone !== undefined) users[idx].phone = phone;
-    if (active !== undefined) users[idx].active = active;
-    if (password) users[idx].password = bcrypt.hashSync(password, 10);
-
-    saveUsers(users);
-    const u = users[idx];
-    res.json({ id: u.id, name: u.name, email: u.email, phone: u.phone, active: u.active });
+    const update = {};
+    if (name     !== undefined) update.name   = name;
+    if (phone    !== undefined) update.phone  = phone;
+    if (active   !== undefined) update.active = active;
+    if (password)               update.password = bcrypt.hashSync(password, 10);
+    const user = await User.findOneAndUpdate({ id: req.params.id, role: 'driver' }, update, { new: true });
+    if (!user) return res.status(404).json({ error: 'Driver not found' });
+    res.json({ id: user.id, name: user.name, email: user.email, phone: user.phone, active: user.active });
   });
 
-  // DELETE /api/auth/drivers/:id  (admin only)
-  app.delete('/api/auth/drivers/:id', authMiddleware, adminOnly, (req, res) => {
-    let users = loadUsers();
-    const driver = users.find(u => u.id === req.params.id && u.role === 'driver');
-    if (!driver) return res.status(404).json({ error: 'Driver not found' });
-    users = users.filter(u => u.id !== req.params.id);
-    saveUsers(users);
+  app.delete('/api/auth/drivers/:id', authMiddleware, adminOnly, async (req, res) => {
+    const result = await User.deleteOne({ id: req.params.id, role: 'driver' });
+    if (!result.deletedCount) return res.status(404).json({ error: 'Driver not found' });
     res.json({ message: 'Driver deleted' });
   });
 }

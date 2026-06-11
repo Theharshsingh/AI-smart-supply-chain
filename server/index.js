@@ -4,8 +4,10 @@ const http    = require('http');
 const { Server } = require('socket.io');
 const cors   = require('cors');
 const cron   = require('node-cron');
+const { connectDB } = require('./db');
 const { registerAuthRoutes, authMiddleware, adminOnly, seedDefaultUsers } = require('./auth');
 const { registerOrderRoutes } = require('./orders');
+const { DriverShipment } = require('./models');
 
 const { generateShipments, interpolate, advanceAlongPolyline, geocodePlace, getAutocompleteSuggestions } = require('./data');
 const { generateRoutes, calculateRisk, haversineKm } = require('./engine');
@@ -20,69 +22,42 @@ const io     = new Server(server, { cors: { origin: '*' } });
 app.use(cors());
 app.use(express.json());
 
-// ── Auth routes + seed default admin ─────────────────────────────────────────
-seedDefaultUsers();
+// ── Auth routes ──────────────────────────────────────────────────────────────
 registerAuthRoutes(app);
 registerOrderRoutes(app, io, authMiddleware, adminOnly);
 
-// ── Driver Shipments Store (server-side) ──────────────────────────────────────
-const fs = require('fs');
-const path = require('path');
-const SHIPMENTS_FILE = path.join(__dirname, 'driver_shipments.json');
-
-function loadDriverShipments() {
-  try {
-    if (!fs.existsSync(SHIPMENTS_FILE)) return [];
-    return JSON.parse(fs.readFileSync(SHIPMENTS_FILE, 'utf8'));
-  } catch { return []; }
+// ── Driver Shipments Store (MongoDB) ─────────────────────────────────────────
+async function broadcastDriverShipments() {
+  io.emit('driver_shipments_update', await DriverShipment.find().sort({ createdAt: -1 }).lean());
 }
 
-function saveDriverShipments(data) {
-  try { fs.writeFileSync(SHIPMENTS_FILE, JSON.stringify(data, null, 2)); } catch {}
-}
-
-let driverShipments = loadDriverShipments();
-
-// Broadcast all driver shipments to admin via socket
-function broadcastDriverShipments() {
-  io.emit('driver_shipments_update', driverShipments);
-}
-
-// POST /api/driver/shipments — driver creates a shipment
-app.post('/api/driver/shipments', authMiddleware, (req, res) => {
-  const shipment = {
-    ...req.body,
-    driverId: req.user.id,
-    driverName: req.user.name,
-    serverCreatedAt: new Date().toISOString(),
-    currentLat: null,
-    currentLng: null,
-    locationUpdatedAt: null,
-  };
-  driverShipments = [shipment, ...driverShipments.filter(s => s.id !== shipment.id)];
-  saveDriverShipments(driverShipments);
-  broadcastDriverShipments();
+app.post('/api/driver/shipments', authMiddleware, async (req, res) => {
+  const shipment = await DriverShipment.findOneAndUpdate(
+    { id: req.body.id },
+    { ...req.body, driverId: req.user.id, driverName: req.user.name, serverCreatedAt: new Date().toISOString(), currentLat: null, currentLng: null, locationUpdatedAt: null },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  await broadcastDriverShipments();
   res.json({ ok: true, shipment });
 });
 
-// PATCH /api/driver/shipments/:id — driver updates status or GPS
-app.patch('/api/driver/shipments/:id', authMiddleware, (req, res) => {
-  const idx = driverShipments.findIndex(s => s.id === req.params.id && s.driverId === req.user.id);
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  driverShipments[idx] = { ...driverShipments[idx], ...req.body, updatedAt: new Date().toISOString() };
-  saveDriverShipments(driverShipments);
-  broadcastDriverShipments();
+app.patch('/api/driver/shipments/:id', authMiddleware, async (req, res) => {
+  const shipment = await DriverShipment.findOneAndUpdate(
+    { id: req.params.id, driverId: req.user.id },
+    { ...req.body, updatedAt: new Date().toISOString() },
+    { new: true }
+  );
+  if (!shipment) return res.status(404).json({ error: 'Not found' });
+  await broadcastDriverShipments();
   res.json({ ok: true });
 });
 
-// GET /api/driver/shipments — driver gets own shipments
-app.get('/api/driver/shipments', authMiddleware, (req, res) => {
-  res.json(driverShipments.filter(s => s.driverId === req.user.id));
+app.get('/api/driver/shipments', authMiddleware, async (req, res) => {
+  res.json(await DriverShipment.find({ driverId: req.user.id }).sort({ createdAt: -1 }).lean());
 });
 
-// GET /api/admin/shipments — admin gets ALL driver shipments
-app.get('/api/admin/shipments', authMiddleware, adminOnly, (req, res) => {
-  res.json(driverShipments);
+app.get('/api/admin/shipments', authMiddleware, adminOnly, async (req, res) => {
+  res.json(await DriverShipment.find().sort({ createdAt: -1 }).lean());
 });
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -187,7 +162,10 @@ function tickShipments() {
 cron.schedule('*/30 * * * * *', refreshGlobalEnv);
 setInterval(tickShipments, 4000);
 
-refreshGlobalEnv().then(() => { tickShipments(); console.log('[Server] Started'); });
+connectDB().then(async () => {
+  await seedDefaultUsers();
+  refreshGlobalEnv().then(() => { tickShipments(); console.log('[Server] Started'); });
+});
 
 // ── REST API ──────────────────────────────────────────────────────────────────
 app.get('/api/shipments', (req, res) => res.json(shipments));
@@ -320,9 +298,9 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
-io.on('connection', socket => {
+io.on('connection', async socket => {
   socket.emit('update', { shipments, env: globalEnv });
-  socket.emit('driver_shipments_update', driverShipments);
+  socket.emit('driver_shipments_update', await DriverShipment.find().sort({ createdAt: -1 }).lean());
 });
 
 const PORT = process.env.PORT || 4000;
