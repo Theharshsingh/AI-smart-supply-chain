@@ -16,6 +16,8 @@ import AdminShipmentDashboard from './components/AdminShipmentDashboard';
 import TrackingPage from './components/TrackingPage';
 import LoginPage from './components/LoginPage';
 import DriversPage from './components/DriversPage';
+import CustomerDashboard from './components/CustomerDashboard';
+import DriverOrdersPanel from './components/DriverOrdersPanel';
 import { useShipmentHistory } from './hooks/useShipmentHistory';
 import { useAuth } from './hooks/useAuth';
 import { weatherColor } from './utils';
@@ -46,6 +48,8 @@ const TABS = [
   { id: 'routes',    label: 'Routes',        Icon: Shuffle, roles: ['admin'] },
   { id: 'insights',  label: 'Insights',      Icon: Brain,   roles: ['admin'] },
   { id: 'livedata',  label: 'Live Data',     Icon: Globe,   roles: ['admin'] },
+  { id: 'book',      label: 'Book Shipment', Icon: Package, roles: ['customer'] },
+  { id: 'customer-orders', label: 'My Orders', Icon: Truck, roles: ['customer'] },
 ];
 
 function WeatherIcon({ w, size = 14 }) {
@@ -558,17 +562,11 @@ export default function App() {
                       <DriversPage />
                     )}
 
-                    {tab === 'dashboard' && (
-                      user.role === 'admin' ? (
-                        <AdminShipmentDashboard driverShipments={driverShipments} />
-                      ) : (
-                        <ShipmentDashboard
-                          history={history}
-                          onStop={id => { stopShipment(id); toast.success('Shipment stopped.'); }}
-                          onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.'); }}
-                          onComplete={id => { completeShipment(id); toast.success('Delivery Successful!', { duration: 4000 }); }}
-                        />
-                      )
+                    {tab === 'book' && <CustomerDashboard />}
+                    {tab === 'customer-orders' && <CustomerDashboard />}
+                    {tab === 'dashboard' && user.role === 'driver' && <DriverOrdersPanel />}
+                    {tab === 'dashboard' && user.role === 'admin' && (
+                      <AdminShipmentDashboard driverShipments={driverShipments} />
                     )}
 
                     {tab === 'routes' && (
@@ -657,19 +655,31 @@ export default function App() {
               </motion.div>
             )}
 
-            {/* My Shipments */}
-            {tab === 'dashboard' && (
+            {/* Customer: Book Shipment */}
+            {tab === 'book' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                {user.role === 'admin' ? (
-                  <AdminShipmentDashboard driverShipments={driverShipments} />
-                ) : (
-                  <ShipmentDashboard
-                    history={history}
-                    onStop={id => { stopShipment(id); toast.success('Shipment stopped.'); }}
-                    onDelete={id => { deleteShipment(id); toast.success('Shipment deleted.'); }}
-                    onComplete={id => { completeShipment(id); toast.success('Delivery Successful!', { duration: 4000 }); }}
-                  />
-                )}
+                <CustomerDashboard />
+              </motion.div>
+            )}
+
+            {/* Customer: My Orders */}
+            {tab === 'customer-orders' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <CustomerDashboard />
+              </motion.div>
+            )}
+
+            {/* Driver: Orders Panel */}
+            {tab === 'dashboard' && user.role === 'driver' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <DriverOrdersPanel />
+              </motion.div>
+            )}
+
+            {/* My Shipments (admin) */}
+            {tab === 'dashboard' && user.role === 'admin' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <AdminShipmentDashboard driverShipments={driverShipments} />
               </motion.div>
             )}
 

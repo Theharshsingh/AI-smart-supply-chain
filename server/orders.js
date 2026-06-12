@@ -4,142 +4,250 @@ function genAWB() {
   return `AWB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
 }
 function genOTP() {
-  return String(Math.floor(1000 + Math.random() * 9000));
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 const STATUS_LABELS = {
-  picked_up: 'Package Picked Up', in_transit: 'In Transit',
-  out_for_delivery: 'Out for Delivery', delivered: 'Delivered', cancelled: 'Cancelled',
+  pending: 'Order Created',
+  accepted: 'Driver Accepted',
+  picked_up: 'Package Picked Up',
+  in_transit: 'In Transit',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
 };
 
-function registerOrderRoutes(app, io, authMiddleware, adminOnly) {
-  function broadcast(orders) {
-    io.emit('orders_update', orders);
-  }
+function calcPrice(distanceKm, weightKg, packageType) {
+  const base = 50;
+  const perKm = 12;
+  const weightSurcharge = weightKg > 5 ? (weightKg - 5) * 8 : 0;
+  const typeSurcharge = packageType === 'Fragile' ? 30 : packageType === 'Electronics' ? 50 : 0;
+  return Math.round(base + distanceKm * perKm + weightSurcharge + typeSurcharge);
+}
 
+function registerOrderRoutes(app, io, authMiddleware, adminOnly, customerOnly, driverOnly) {
   async function allOrders() {
     return Order.find().sort({ createdAt: -1 }).lean();
   }
 
-  app.post('/api/orders', authMiddleware, adminOnly, async (req, res) => {
+  async function pendingOrders() {
+    return Order.find({ status: 'pending' }).sort({ createdAt: -1 }).lean();
+  }
+
+  // ── Customer: Create booking ──────────────────────────────────────────────
+  app.post('/api/customer/orders', authMiddleware, customerOnly, async (req, res) => {
     const {
-      senderName, senderPhone, senderAddress,
-      receiverName, receiverPhone, receiverAddress,
-      fromLat, fromLon, toLat, toLon,
-      packageDesc, weightKg, packageType,
-      notes, distanceKm, durationMin,
+      pickupAddress, pickupLat, pickupLon,
+      dropAddress, dropLat, dropLon,
+      packageDesc, weightKg, packageType, notes,
+      senderName, senderPhone, receiverName, receiverPhone,
+      distanceKm,
     } = req.body;
 
-    if (!senderName || !receiverName || !senderAddress || !receiverAddress)
-      return res.status(400).json({ error: 'Sender and receiver details required' });
+    if (!senderName || !receiverName || !pickupAddress || !dropAddress)
+      return res.status(400).json({ error: 'Sender, receiver, pickup and drop addresses required' });
+
+    const id = `ORD-${Date.now()}`;
+    const awb = genAWB();
+    const otp = genOTP();
+    const dist = distanceKm || 0;
+    const price = calcPrice(dist, weightKg || 1, packageType || 'Parcel');
 
     const order = await Order.create({
-      id: `ORD-${Date.now()}`, awb: genAWB(), otp: genOTP(), status: 'pending',
+      id, awb, otp, status: 'pending',
       createdBy: req.user.id,
-      senderName, senderPhone: senderPhone || '', senderAddress,
-      fromLat: fromLat || null, fromLon: fromLon || null,
-      receiverName, receiverPhone: receiverPhone || '', receiverAddress,
-      toLat: toLat || null, toLon: toLon || null,
+      customerId: req.user.id,
+      senderName, senderPhone: senderPhone || '',
+      senderAddress: pickupAddress,
+      fromLat: pickupLat || null, fromLon: pickupLon || null,
+      receiverName, receiverPhone: receiverPhone || '',
+      receiverAddress: dropAddress,
+      toLat: dropLat || null, toLon: dropLon || null,
       packageDesc: packageDesc || 'General goods', weightKg: weightKg || null,
-      packageType: packageType || 'standard', notes: notes || '',
-      distanceKm: distanceKm || null, durationMin: durationMin || null,
+      packageType: packageType || 'Parcel', notes: notes || '',
+      distanceKm: dist,
       driverId: null, driverName: null,
-      timeline: [{ status: 'pending', label: 'Order Created', time: new Date().toISOString(), note: 'Created by admin' }],
+      timeline: [{ status: 'pending', label: 'Order Created', time: new Date().toISOString(), note: 'Booked by customer' }],
       currentLat: null, currentLng: null, locationUpdatedAt: null,
       deliveredAt: null, otpVerified: false,
     });
 
-    broadcast(await allOrders());
+    // Emit new order to all drivers
+    io.emit('new_order_request', order);
+    io.emit('pending_orders_update', await pendingOrders());
+
+    res.json({ ok: true, order, price });
+  });
+
+  // ── Customer: List own orders ─────────────────────────────────────────────
+  app.get('/api/customer/orders', authMiddleware, customerOnly, async (req, res) => {
+    const orders = await Order.find({ customerId: req.user.id }).sort({ createdAt: -1 }).lean();
+    res.json(Array.isArray(orders) ? orders : []);
+  });
+
+  // ── Customer: Cancel own pending order ────────────────────────────────────
+  app.delete('/api/customer/orders/:id', authMiddleware, customerOnly, async (req, res) => {
+    const order = await Order.findOne({ id: req.params.id, customerId: req.user.id });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.status !== 'pending') return res.status(400).json({ error: 'Can only cancel pending orders' });
+
+    order.status = 'cancelled';
+    order.timeline.push({ status: 'cancelled', label: 'Cancelled by Customer', time: new Date().toISOString(), note: 'Cancelled by customer' });
+    await order.save();
+
+    io.emit('order_status_update', order);
+    io.emit('pending_orders_update', await pendingOrders());
     res.json({ ok: true, order });
   });
 
-  app.get('/api/orders', authMiddleware, adminOnly, async (req, res) => {
-    res.json(await allOrders());
-  });
-
-  app.patch('/api/orders/:id/assign', authMiddleware, adminOnly, async (req, res) => {
-    const { driverId, driverName } = req.body;
-    const order = await Order.findOneAndUpdate(
-      { id: req.params.id },
-      {
-        driverId, driverName, status: 'assigned', updatedAt: new Date(),
-        $push: { timeline: { status: 'assigned', label: 'Driver Assigned', time: new Date().toISOString(), note: `Assigned to ${driverName}` } },
-      },
-      { new: true }
-    );
+  // ── Customer: Submit rating/feedback ──────────────────────────────────────
+  app.post('/api/customer/orders/:id/feedback', authMiddleware, customerOnly, async (req, res) => {
+    const { rating, feedback } = req.body;
+    const order = await Order.findOne({ id: req.params.id, customerId: req.user.id });
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    broadcast(await allOrders());
-    res.json({ ok: true, order });
-  });
+    if (order.status !== 'delivered') return res.status(400).json({ error: 'Can only rate delivered orders' });
 
-  app.patch('/api/orders/:id/cancel', authMiddleware, adminOnly, async (req, res) => {
-    const order = await Order.findOneAndUpdate(
-      { id: req.params.id },
-      {
-        status: 'cancelled', updatedAt: new Date(),
-        $push: { timeline: { status: 'cancelled', label: 'Order Cancelled', time: new Date().toISOString(), note: req.body.reason || '' } },
-      },
-      { new: true }
-    );
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-    broadcast(await allOrders());
+    order.rating = rating || null;
+    order.feedback = feedback || '';
+    await order.save();
     res.json({ ok: true });
   });
 
-  app.get('/api/orders/mine', authMiddleware, async (req, res) => {
-    res.json(await Order.find({ driverId: req.user.id, status: { $ne: 'cancelled' } }).sort({ createdAt: -1 }).lean());
-  });
+  // ── Driver: Accept order ──────────────────────────────────────────────────
+  app.patch('/api/driver/orders/:id/accept', authMiddleware, driverOnly, async (req, res) => {
+    const order = await Order.findOne({ id: req.params.id, status: 'pending' });
+    if (!order) return res.status(404).json({ error: 'Order not found or already taken' });
 
-  app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
-    const { status, note } = req.body;
-    const existing = await Order.findOne({ id: req.params.id });
-    if (!existing) return res.status(404).json({ error: 'Order not found' });
-    if (req.user.role !== 'admin' && existing.driverId !== req.user.id)
-      return res.status(403).json({ error: 'Not your order' });
+    const driver = await req.dbUser || await (require('./models').User.findOne({ id: req.user.id }));
+    const driverName = req.user.name;
+    const driverPhone = req.user.phone || '';
 
-    const order = await Order.findOneAndUpdate(
-      { id: req.params.id },
-      {
-        status, updatedAt: new Date(),
-        deliveredAt: status === 'delivered' ? new Date().toISOString() : existing.deliveredAt,
-        $push: { timeline: { status, label: STATUS_LABELS[status] || status, time: new Date().toISOString(), note: note || '' } },
-      },
-      { new: true }
-    );
-    broadcast(await allOrders());
+    order.status = 'accepted';
+    order.driverId = req.user.id;
+    order.driverName = driverName;
+    order.driverPhone = driverPhone;
+    order.driverVehicle = '';
+    order.timeline.push({ status: 'accepted', label: 'Driver Accepted', time: new Date().toISOString(), note: `${driverName} accepted this order` });
+    await order.save();
+
+    io.emit('order_accepted', { orderId: order.id, driverId: req.user.id, driverName, driverPhone });
+    io.emit('order_status_update', order);
+    io.emit('pending_orders_update', await pendingOrders());
     res.json({ ok: true, order });
   });
 
-  app.patch('/api/orders/:id/location', authMiddleware, async (req, res) => {
+  // ── Driver: Reject order ──────────────────────────────────────────────────
+  app.patch('/api/driver/orders/:id/reject', authMiddleware, driverOnly, async (req, res) => {
+    const order = await Order.findOne({ id: req.params.id, status: 'pending' });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    // Just emit rejection so other drivers know this driver passed
+    io.emit('order_rejected', { orderId: order.id, driverId: req.user.id });
+    res.json({ ok: true });
+  });
+
+  // ── Driver: Mark picked up ────────────────────────────────────────────────
+  app.patch('/api/driver/orders/:id/pickup', authMiddleware, driverOnly, async (req, res) => {
+    const order = await Order.findOne({ id: req.params.id, driverId: req.user.id });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.status !== 'accepted') return res.status(400).json({ error: 'Order must be accepted first' });
+
+    order.status = 'picked_up';
+    order.timeline.push({ status: 'picked_up', label: 'Package Picked Up', time: new Date().toISOString(), note: 'Package picked up by driver' });
+    await order.save();
+
+    io.emit('order_status_update', order);
+    // Notify customer to share OTP with driver
+    io.emit('otp_reminder', { orderId: order.id, customerId: order.customerId, otp: order.otp, driverName: order.driverName });
+    res.json({ ok: true, order });
+  });
+
+  // ── Driver: Mark in_transit ───────────────────────────────────────────────
+  app.patch('/api/driver/orders/:id/transit', authMiddleware, driverOnly, async (req, res) => {
+    const order = await Order.findOne({ id: req.params.id, driverId: req.user.id });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.status !== 'picked_up') return res.status(400).json({ error: 'Order must be picked up first' });
+
+    order.status = 'in_transit';
+    order.timeline.push({ status: 'in_transit', label: 'In Transit', time: new Date().toISOString(), note: 'Package in transit to destination' });
+    await order.save();
+
+    io.emit('order_status_update', order);
+    res.json({ ok: true, order });
+  });
+
+  // ── Driver: Deliver with OTP verification ─────────────────────────────────
+  app.patch('/api/driver/orders/:id/deliver', authMiddleware, driverOnly, async (req, res) => {
+    const { otp } = req.body;
+    const order = await Order.findOne({ id: req.params.id, driverId: req.user.id });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.status !== 'in_transit' && order.status !== 'picked_up') return res.status(400).json({ error: 'Order must be in transit' });
+    if (String(order.otp) !== String(otp)) return res.status(400).json({ error: 'Invalid OTP' });
+
+    order.status = 'delivered';
+    order.otpVerified = true;
+    order.deliveredAt = new Date().toISOString();
+    order.timeline.push({ status: 'delivered', label: 'Package Delivered', time: new Date().toISOString(), note: 'Delivered — OTP confirmed' });
+    await order.save();
+
+    io.emit('order_status_update', order);
+    res.json({ ok: true, order });
+  });
+
+  // ── Driver: Update GPS location ───────────────────────────────────────────
+  app.patch('/api/driver/orders/:id/location', authMiddleware, driverOnly, async (req, res) => {
     const { lat, lng } = req.body;
     const order = await Order.findOneAndUpdate(
-      { id: req.params.id },
+      { id: req.params.id, driverId: req.user.id },
       { currentLat: lat, currentLng: lng, locationUpdatedAt: new Date().toISOString() },
       { new: true }
     );
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-    broadcast(await allOrders());
+    if (!order) return res.status(404).json({ error: 'Order not found or not assigned to you' });
+
+    io.emit('driver_location_update', { orderId: order.id, lat, lng, driverId: req.user.id });
     res.json({ ok: true });
   });
 
-  app.post('/api/orders/:id/verify-otp', authMiddleware, async (req, res) => {
-    const existing = await Order.findOne({ id: req.params.id });
-    if (!existing) return res.status(404).json({ error: 'Order not found' });
-    if (existing.otp !== String(req.body.otp)) return res.status(400).json({ error: 'Invalid OTP' });
+  // ── Driver: Get my accepted orders ────────────────────────────────────────
+  app.get('/api/driver/orders', authMiddleware, driverOnly, async (req, res) => {
+    const orders = await Order.find({
+      driverId: req.user.id,
+      status: { $in: ['accepted', 'picked_up', 'in_transit', 'delivered'] }
+    }).sort({ createdAt: -1 }).lean();
+    res.json(Array.isArray(orders) ? orders : []);
+  });
 
-    const order = await Order.findOneAndUpdate(
-      { id: req.params.id },
-      {
-        status: 'delivered', otpVerified: true,
-        deliveredAt: new Date().toISOString(), updatedAt: new Date(),
-        $push: { timeline: { status: 'delivered', label: '✅ Delivered — OTP Verified', time: new Date().toISOString(), note: 'Customer OTP confirmed' } },
-      },
-      { new: true }
-    );
-    broadcast(await allOrders());
+  // ── Driver: Get pending orders list ───────────────────────────────────────
+  app.get('/api/driver/orders/pending', authMiddleware, driverOnly, async (req, res) => {
+    const orders = await pendingOrders();
+    res.json(Array.isArray(orders) ? orders : []);
+  });
+
+  // ── Admin: Get all orders ─────────────────────────────────────────────────
+  app.get('/api/admin/orders', authMiddleware, adminOnly, async (req, res) => {
+    res.json(await allOrders());
+  });
+
+  // ── Admin: Assign driver to pending order ─────────────────────────────────
+  app.post('/api/admin/orders/:id/assign', authMiddleware, adminOnly, async (req, res) => {
+    const { driverId, driverName } = req.body;
+    if (!driverId || !driverName) return res.status(400).json({ error: 'driverId and driverName required' });
+
+    const order = await Order.findOne({ id: req.params.id, status: 'pending' });
+    if (!order) return res.status(404).json({ error: 'Pending order not found' });
+
+    order.driverId = driverId;
+    order.driverName = driverName;
+    order.status = 'accepted';
+    order.timeline.push({ status: 'accepted', label: 'Driver Assigned by Admin', time: new Date().toISOString(), note: `Manually assigned to ${driverName}` });
+    await order.save();
+
+    io.emit('order_accepted', { orderId: order.id, driverId, driverName });
+    io.emit('order_status_update', order);
+    io.emit('pending_orders_update', await pendingOrders());
     res.json({ ok: true, order });
   });
 
+  // ── Public tracking ───────────────────────────────────────────────────────
   app.get('/api/track/:awb', async (req, res) => {
     const order = await Order.findOne({ awb: req.params.awb.toUpperCase() }).lean();
     if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -147,8 +255,10 @@ function registerOrderRoutes(app, io, authMiddleware, adminOnly) {
     res.json(safe);
   });
 
+  // ── Socket: send pending orders on connect ────────────────────────────────
   io.on('connection', async socket => {
     socket.emit('orders_update', await allOrders());
+    socket.emit('pending_orders_update', await pendingOrders());
   });
 }
 

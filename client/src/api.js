@@ -9,6 +9,13 @@ export function useSocket() {
     env: { traffic: 0.3, weather: 'Clear', forecastWorst: 'Clear', alerts: [], apiStatus: {}, weatherData: {}, trafficData: {} },
     alerts: [],
     driverShipments: [],
+    customerOrders: [],
+    pendingOrders: [],
+    orderAccepted: null,
+    orderStatusUpdate: null,
+    otpReminder: null,
+    driverLocation: null,
+    newOrderRequest: null,
   });
   const socketRef = useRef(null);
 
@@ -24,6 +31,27 @@ export function useSocket() {
     });
     socketRef.current.on('driver_shipments_update', payload => {
       setData(prev => ({ ...prev, driverShipments: Array.isArray(payload) ? payload : [] }));
+    });
+    socketRef.current.on('new_order_request', payload => {
+      setData(prev => ({ ...prev, newOrderRequest: payload }));
+    });
+    socketRef.current.on('order_accepted', payload => {
+      setData(prev => ({ ...prev, orderAccepted: payload }));
+    });
+    socketRef.current.on('order_rejected', payload => {
+      // cleared after 2s visibility
+    });
+    socketRef.current.on('order_status_update', payload => {
+      setData(prev => ({ ...prev, orderStatusUpdate: payload }));
+    });
+    socketRef.current.on('otp_reminder', payload => {
+      setData(prev => ({ ...prev, otpReminder: payload }));
+    });
+    socketRef.current.on('driver_location_update', payload => {
+      setData(prev => ({ ...prev, driverLocation: payload }));
+    });
+    socketRef.current.on('pending_orders_update', payload => {
+      setData(prev => ({ ...prev, pendingOrders: Array.isArray(payload) ? payload : [] }));
     });
     return () => socketRef.current.disconnect();
   }, []);
@@ -259,7 +287,7 @@ function authHeader() {
 }
 
 export async function createOrder(data) {
-  const res = await fetch(`${API_URL}/api/orders`, {
+  const res = await fetch(`${API_URL}/api/customer/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify(data),
@@ -356,6 +384,114 @@ export async function serverGetMyShipments() {
 export async function serverGetAllShipments() {
   const res = await fetch(`${API_URL}/api/admin/shipments`, {
     headers: authHeader(),
+  });
+  return res.json();
+}
+
+// ── Customer Order APIs ───────────────────────────────────────────────────────
+export async function customerCreateOrder(data) {
+  const res = await fetch(`${API_URL}/api/customer/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function customerGetOrders() {
+  const res = await fetch(`${API_URL}/api/customer/orders`, { headers: authHeader() });
+  return res.json();
+}
+
+export async function customerCancelOrder(id) {
+  const res = await fetch(`${API_URL}/api/customer/orders/${id}`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  });
+  return res.json();
+}
+
+export async function customerSubmitFeedback(id, rating, feedback) {
+  const res = await fetch(`${API_URL}/api/customer/orders/${id}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ rating, feedback }),
+  });
+  return res.json();
+}
+
+// ── Driver Order APIs ─────────────────────────────────────────────────────────
+export async function driverAcceptOrder(id) {
+  const res = await fetch(`${API_URL}/api/driver/orders/${id}/accept`, {
+    method: 'PATCH',
+    headers: authHeader(),
+  });
+  return res.json();
+}
+
+export async function driverRejectOrder(id) {
+  const res = await fetch(`${API_URL}/api/driver/orders/${id}/reject`, {
+    method: 'PATCH',
+    headers: authHeader(),
+  });
+  return res.json();
+}
+
+export async function driverPickupOrder(id) {
+  const res = await fetch(`${API_URL}/api/driver/orders/${id}/pickup`, {
+    method: 'PATCH',
+    headers: authHeader(),
+  });
+  return res.json();
+}
+
+export async function driverTransitOrder(id) {
+  const res = await fetch(`${API_URL}/api/driver/orders/${id}/transit`, {
+    method: 'PATCH',
+    headers: authHeader(),
+  });
+  return res.json();
+}
+
+export async function driverDeliverOrder(id, otp) {
+  const res = await fetch(`${API_URL}/api/driver/orders/${id}/deliver`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ otp }),
+  });
+  return res.json();
+}
+
+export async function driverUpdateOrderLocation(id, lat, lng) {
+  const res = await fetch(`${API_URL}/api/driver/orders/${id}/location`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ lat, lng }),
+  });
+  return res.json();
+}
+
+export async function driverGetOrders() {
+  const res = await fetch(`${API_URL}/api/driver/orders`, { headers: authHeader() });
+  return res.json();
+}
+
+export async function driverGetPendingOrders() {
+  const res = await fetch(`${API_URL}/api/driver/orders/pending`, { headers: authHeader() });
+  return res.json();
+}
+
+// ── Admin Order APIs ──────────────────────────────────────────────────────────
+export async function adminGetAllOrders() {
+  const res = await fetch(`${API_URL}/api/admin/orders`, { headers: authHeader() });
+  return res.json();
+}
+
+export async function adminAssignDriver(orderId, driverId, driverName) {
+  const res = await fetch(`${API_URL}/api/admin/orders/${orderId}/assign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ driverId, driverName }),
   });
   return res.json();
 }

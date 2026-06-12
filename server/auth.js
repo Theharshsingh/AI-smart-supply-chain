@@ -45,7 +45,29 @@ function adminOnly(req, res, next) {
   next();
 }
 
+function customerOnly(req, res, next) {
+  if (req.user?.role !== 'customer') return res.status(403).json({ error: 'Customer access required' });
+  next();
+}
+
+function driverOnly(req, res, next) {
+  if (req.user?.role !== 'driver') return res.status(403).json({ error: 'Driver access required' });
+  next();
+}
+
 function registerAuthRoutes(app) {
+  app.post('/api/auth/register', async (req, res) => {
+    const { name, email, phone, password } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, password required' });
+    if (await User.findOne({ email: email.toLowerCase() })) return res.status(409).json({ error: 'Email already exists' });
+    const user = await User.create({
+      id: `CUS-${Date.now()}`, name, email: email.toLowerCase(), phone: phone || '',
+      password: bcrypt.hashSync(password, 10), role: 'customer', active: true,
+    });
+    const token = generateToken(user);
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: 'customer', phone: user.phone } });
+  });
+
   app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -96,4 +118,4 @@ function registerAuthRoutes(app) {
   });
 }
 
-module.exports = { registerAuthRoutes, authMiddleware, adminOnly, seedDefaultUsers };
+module.exports = { registerAuthRoutes, authMiddleware, adminOnly, customerOnly, driverOnly, seedDefaultUsers };

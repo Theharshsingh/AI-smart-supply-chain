@@ -20,16 +20,19 @@ const orderSchema = new mongoose.Schema({
   otp:          String,
   status:       { type: String, default: 'pending' },
   createdBy:    String,
+  customerId:   String,
   senderName:   String, senderPhone: String, senderAddress: String,
   fromLat:      Number, fromLon: Number,
   receiverName: String, receiverPhone: String, receiverAddress: String,
   toLat:        Number, toLon: Number,
   packageDesc:  String, weightKg: Number, packageType: String, notes: String,
   distanceKm:   Number, durationMin: Number,
-  driverId:     String, driverName: String,
+  driverId:     String, driverName: String, driverPhone: String, driverVehicle: String,
   timeline:     [timelineSchema],
   currentLat:   Number, currentLng: Number, locationUpdatedAt: String,
   deliveredAt:  String, otpVerified: { type: Boolean, default: false },
+  rating:       { type: Number, default: null },
+  feedback:     { type: String, default: '' },
 }, { timestamps: true });
 
 const driverShipmentSchema = new mongoose.Schema({

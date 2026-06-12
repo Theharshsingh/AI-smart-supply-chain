@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 const cors   = require('cors');
 const cron   = require('node-cron');
 const { connectDB } = require('./db');
-const { registerAuthRoutes, authMiddleware, adminOnly, seedDefaultUsers } = require('./auth');
+const { registerAuthRoutes, authMiddleware, adminOnly, customerOnly, driverOnly, seedDefaultUsers } = require('./auth');
 const { registerOrderRoutes } = require('./orders');
 const { DriverShipment } = require('./models');
 
@@ -24,7 +24,7 @@ app.use(express.json());
 
 // ── Auth routes ──────────────────────────────────────────────────────────────
 registerAuthRoutes(app);
-registerOrderRoutes(app, io, authMiddleware, adminOnly);
+registerOrderRoutes(app, io, authMiddleware, adminOnly, customerOnly, driverOnly);
 
 // ── Driver Shipments Store (MongoDB) ─────────────────────────────────────────
 async function broadcastDriverShipments() {
