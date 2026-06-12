@@ -562,8 +562,8 @@ export default function App() {
                       <DriversPage />
                     )}
 
-                    {tab === 'book' && <CustomerDashboard />}
-                    {tab === 'customer-orders' && <CustomerDashboard />}
+                    {tab === 'book' && <CustomerDashboard initialTab="book" />}
+                    {tab === 'customer-orders' && <CustomerDashboard initialTab="orders" />}
                     {tab === 'dashboard' && user.role === 'driver' && <DriverOrdersPanel />}
                     {tab === 'dashboard' && user.role === 'admin' && (
                       <AdminShipmentDashboard driverShipments={driverShipments} />
@@ -658,14 +658,14 @@ export default function App() {
             {/* Customer: Book Shipment */}
             {tab === 'book' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                <CustomerDashboard />
+                <CustomerDashboard initialTab="book" />
               </motion.div>
             )}
 
             {/* Customer: My Orders */}
             {tab === 'customer-orders' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                <CustomerDashboard />
+                <CustomerDashboard initialTab="orders" />
               </motion.div>
             )}
 

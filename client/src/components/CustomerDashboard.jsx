@@ -406,8 +406,8 @@ function TrackingModal({ order, onClose }) {
 }
 
 // ── Main CustomerDashboard ──────────────────────────────────────────────────
-export default function CustomerDashboard() {
-  const [activeTab, setActiveTab] = useState('book');
+export default function CustomerDashboard({ initialTab = 'book' }) {
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
