@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
@@ -19,13 +19,18 @@ import DriversPage from './components/DriversPage';
 import { useShipmentHistory } from './hooks/useShipmentHistory';
 import { useAuth } from './hooks/useAuth';
 import { weatherColor } from './utils';
+import { CardSkeleton, MapSkeleton, KPISkeleton, AlertSkeleton } from './components/Skeleton';
+import useCountUp from './hooks/useCountUp';
 import {
   Map, Package, Truck, Shuffle, Brain, Globe,
   Rocket, LogOut, Search, Moon, Sun, X,
   CloudSun, CloudRain, Cloud, CloudLightning, Wind,
   TrafficCone, Bell, CheckCircle, Trash2, StopCircle,
-  Loader2,
+  Loader2, Clock, Activity,
 } from 'lucide-react';
+
+// Lazy load the 3D background for performance
+const ThreeBackground = lazy(() => import('./components/ThreeBackground'));
 
 // ── If ?tracking= param present, export TrackingPage directly ──────────────
 const _isTracking = new URLSearchParams(window.location.search).get('tracking');
@@ -60,8 +65,9 @@ function useIsMobile() {
   return isMobile;
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
+// ── KPI Card with count-up animation ──────────────────────────────────────────
 function KpiCard({ Icon, iconBg, iconColor, label, value, badge, badgeColor, badgeBg, sub }) {
+  const { count, ref } = useCountUp(typeof value === 'number' ? value : 0, 700);
   return (
     <motion.div
       className="kpi-card"
@@ -76,7 +82,7 @@ function KpiCard({ Icon, iconBg, iconColor, label, value, badge, badgeColor, bad
         </div>
         {badge && <span className="kpi-badge" style={{ color: badgeColor, background: badgeBg }}>{badge}</span>}
       </div>
-      <div className="kpi-val">{value}</div>
+      <div className="kpi-val" ref={ref}>{count}</div>
       <div className="kpi-lbl">{label}</div>
       {sub && <div className="kpi-sub">{sub}</div>}
     </motion.div>
@@ -244,6 +250,15 @@ export default function App() {
 
   return (
     <div className="app-shell" data-theme={dark ? 'dark' : 'light'}>
+      {/* ── 3D Animated Background ── */}
+      <Suspense fallback={null}>
+        <ThreeBackground />
+      </Suspense>
+
+      {/* ── Glow Rings ── */}
+      <div className="glow-ring" style={{ top: '-10%', left: '-5%' }} />
+      <div className="glow-ring" style={{ bottom: '-10%', right: '-5%' }} />
+
       <Toaster
         position={isMobile ? 'top-center' : 'top-right'}
         toastOptions={{

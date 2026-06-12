@@ -453,16 +453,17 @@ export default function ShipmentDashboard({ history, onStop, onDelete, onComplet
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {filtered.map(s => (
-            <ShipmentCard
-              key={s.id}
-              s={s}
-              onStop={onStop}
-              onDelete={onDelete}
-              onComplete={onComplete}
-              onViewDetail={setDetail}
-              onShowQR={setQrShipment}
-            />
+          {filtered.map((s, i) => (
+            <div key={s.id} className="stagger-item" style={{ animationDelay: `${i * 0.05}s` }}>
+              <ShipmentCard
+                s={s}
+                onStop={onStop}
+                onDelete={onDelete}
+                onComplete={onComplete}
+                onViewDetail={setDetail}
+                onShowQR={setQrShipment}
+              />
+            </div>
           ))}
         </div>
       )}

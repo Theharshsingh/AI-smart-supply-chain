@@ -158,7 +158,7 @@ export default function AlertsPanel({ env, alerts, shipments = [], speed = 0, is
       <div className="sec-lbl">Active Alerts</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {alerts?.length > 0
-          ? alerts.map((a, i) => <AlertItem key={i} alert={a} />)
+          ? alerts.map((a, i) => <div key={i} className="stagger-item"><AlertItem alert={a} /></div>)
           : (
             <div style={{ fontSize: 12, color: 'var(--tx-3)', textAlign: 'center', padding: '10px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <CheckCircle size={13} color="var(--green)" /> All routes clear
