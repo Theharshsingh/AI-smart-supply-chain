@@ -15,10 +15,15 @@ export function useSocket() {
   useEffect(() => {
     socketRef.current = io(API_URL);
     socketRef.current.on('update', payload => {
-      setData(prev => ({ ...prev, shipments: payload.shipments, env: payload.env, alerts: payload.env?.alerts || [] }));
+      setData(prev => ({
+        ...prev,
+        shipments: Array.isArray(payload.shipments) ? payload.shipments : [],
+        env: payload.env || prev.env,
+        alerts: Array.isArray(payload.env?.alerts) ? payload.env.alerts : [],
+      }));
     });
     socketRef.current.on('driver_shipments_update', payload => {
-      setData(prev => ({ ...prev, driverShipments: payload }));
+      setData(prev => ({ ...prev, driverShipments: Array.isArray(payload) ? payload : [] }));
     });
     return () => socketRef.current.disconnect();
   }, []);

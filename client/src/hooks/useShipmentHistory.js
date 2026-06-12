@@ -20,9 +20,10 @@ export function useShipmentHistory() {
     if (!token) return;
     serverGetMyShipments()
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setHistory(data);
-          saveLocal(data);
+        const arr = Array.isArray(data) ? data : [];
+        if (arr.length > 0) {
+          setHistory(arr);
+          saveLocal(arr);
         }
       })
       .catch(() => {}); // fallback to localStorage if server down

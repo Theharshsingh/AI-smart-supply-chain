@@ -233,11 +233,11 @@ export default function App() {
   }
 
   // ── KPI — admin uses driverShipments, driver uses own history ──────────────
-  const kpiSource    = user.role === 'admin' ? driverShipments : history;
+  const kpiSource    = user.role === 'admin' ? (Array.isArray(driverShipments) ? driverShipments : []) : (Array.isArray(history) ? history : []);
   const onTime       = kpiSource.filter(s => s.status === 'completed').length;
   const atRisk       = kpiSource.filter(s => s.status === 'ongoing').length;
   const delayed      = kpiSource.filter(s => s.status === 'cancelled').length;
-  const autoSwitched = shipments.filter(s => s.autoSwitched).length;
+  const autoSwitched = (Array.isArray(shipments) ? shipments : []).filter(s => s.autoSwitched).length;
   const onTimePct    = kpiSource.length ? Math.round(onTime / kpiSource.length * 100) : 0;
   const trafficPct   = Math.round((env.traffic || 0) * 100);
   const ongoingCount = user.role === 'admin'
