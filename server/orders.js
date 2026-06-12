@@ -43,7 +43,14 @@ function registerOrderRoutes(app, io, authMiddleware, adminOnly, customerOnly, d
       distanceKm,
     } = req.body;
 
-    if (!senderName || !receiverName || !pickupAddress || !dropAddress)
+    const pickup = pickupAddress || req.body.senderAddress;
+    const drop   = dropAddress   || req.body.receiverAddress;
+    const pLat   = pickupLat  || req.body.fromLat;
+    const pLon   = pickupLon  || req.body.fromLon;
+    const dLat   = dropLat    || req.body.toLat;
+    const dLon   = dropLon    || req.body.toLon;
+
+    if (!senderName || !receiverName || !pickup || !drop)
       return res.status(400).json({ error: 'Sender, receiver, pickup and drop addresses required' });
 
     const id = `ORD-${Date.now()}`;
@@ -57,11 +64,11 @@ function registerOrderRoutes(app, io, authMiddleware, adminOnly, customerOnly, d
       createdBy: req.user.id,
       customerId: req.user.id,
       senderName, senderPhone: senderPhone || '',
-      senderAddress: pickupAddress,
-      fromLat: pickupLat || null, fromLon: pickupLon || null,
+      senderAddress: pickup,
+      fromLat: pLat || null, fromLon: pLon || null,
       receiverName, receiverPhone: receiverPhone || '',
-      receiverAddress: dropAddress,
-      toLat: dropLat || null, toLon: dropLon || null,
+      receiverAddress: drop,
+      toLat: dLat || null, toLon: dLon || null,
       packageDesc: packageDesc || 'General goods', weightKg: weightKg || null,
       packageType: packageType || 'Parcel', notes: notes || '',
       distanceKm: dist,

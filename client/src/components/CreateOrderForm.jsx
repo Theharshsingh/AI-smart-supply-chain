@@ -146,10 +146,12 @@ export default function CreateOrderForm({ onCreated, onCancel }) {
     setLoading(true);
     try {
       const res = await createOrder({
-        senderName, senderPhone, senderAddress: senderAddr.text,
-        fromLat: senderAddr.lat, fromLon: senderAddr.lon,
-        receiverName, receiverPhone, receiverAddress: receiverAddr.text,
-        toLat: receiverAddr.lat, toLon: receiverAddr.lon,
+        senderName, senderPhone,
+        pickupAddress: senderAddr.text,
+        pickupLat: senderAddr.lat, pickupLon: senderAddr.lon,
+        receiverName, receiverPhone,
+        dropAddress: receiverAddr.text,
+        dropLat: receiverAddr.lat, dropLon: receiverAddr.lon,
         packageDesc, weightKg: weightKg ? parseFloat(weightKg) : null,
         packageType, notes,
       });
