@@ -5,17 +5,14 @@ import { Suspense } from 'react';
 
 function ParticleField({ count = 80 }) {
   const mesh = useRef();
-  const particles = useMemo(() => {
-    const temp = [];
+  const positions = useMemo(() => {
+    const arr = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      temp.push({
-        pos: [(Math.random() - 0.5) * 18, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 10 - 5],
-        speed: 0.1 + Math.random() * 0.3,
-        size: 0.02 + Math.random() * 0.04,
-        color: ['#3b82f6', '#6366f1', '#10b981', '#8b5cf6'][Math.floor(Math.random() * 4)],
-      });
+      arr[i * 3]     = (Math.random() - 0.5) * 18;
+      arr[i * 3 + 1] = (Math.random() - 0.5) * 12;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 10 - 5;
     }
-    return temp;
+    return arr;
   }, [count]);
 
   useFrame(({ clock }) => {
@@ -28,12 +25,7 @@ function ParticleField({ count = 80 }) {
   return (
     <points ref={mesh}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={particles.length}
-          itemSize={3}
-          array={new Float32Array(particles.flatMap(p => p.pos))}
-        />
+        <bufferAttribute args={[positions, 3]} attach="attributes-position" />
       </bufferGeometry>
       <pointsMaterial
         size={0.06}
@@ -87,8 +79,7 @@ function ConnectionLines() {
     ];
     for (let i = 0; i < cities.length; i++) {
       for (let j = i + 1; j < cities.length; j++) {
-        pts.push(...cities[i]);
-        pts.push(...cities[j]);
+        pts.push(...cities[i], ...cities[j]);
       }
     }
     return new Float32Array(pts);
@@ -103,12 +94,7 @@ function ConnectionLines() {
   return (
     <lineSegments ref={mesh}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={positions.length / 3}
-          itemSize={3}
-          array={positions}
-        />
+        <bufferAttribute args={[positions, 3]} attach="attributes-position" />
       </bufferGeometry>
       <lineBasicMaterial color="#3b82f6" transparent opacity={0.15} />
     </lineSegments>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { MapPin, Clock, Truck, CheckCircle, XCircle, Loader, Eye, Package, Inbox, SignalZero, PartyPopper, X } from 'lucide-react';
+import { Clock, Truck, CheckCircle, XCircle, Loader, Eye, Package, Inbox, SignalZero, PartyPopper, X, Trash2, StopCircle } from 'lucide-react';
+import { serverUpdateShipment, serverGetAllShipments } from '../api';
 
 function fmtTime(iso) {
   if (!iso) return '—';
@@ -143,7 +144,7 @@ function DetailModal({ shipment, onClose }) {
 }
 
 // ── Single Order Card ─────────────────────────────────────────────────────────
-function OrderCard({ s, onViewDetail }) {
+function OrderCard({ s, onViewDetail, onCancel, onDelete }) {
   const isOngoing = s.status === 'ongoing';
 
   const distToDestM = s.currentLat && s.toLat
@@ -195,18 +196,46 @@ function OrderCard({ s, onViewDetail }) {
           </div>
         </div>
 
-        {/* View detail button */}
-        <button
-          onClick={() => onViewDetail(s)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-            background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
-            borderRadius: 8, padding: '6px 12px', color: '#60a5fa',
-            fontSize: 11, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          <Eye size={12} /> Details
-        </button>
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button
+            onClick={() => onViewDetail(s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
+              borderRadius: 8, padding: '6px 10px', color: '#60a5fa',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <Eye size={12} /> Details
+          </button>
+          {s.status === 'ongoing' && (
+            <button
+              onClick={() => onCancel(s.id)}
+              title="Cancel shipment"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
+                borderRadius: 8, padding: '6px 10px', color: '#fcd34d',
+                fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              <StopCircle size={12} /> Cancel
+            </button>
+          )}
+          <button
+            onClick={() => onDelete(s.id)}
+            title="Delete shipment"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
+              borderRadius: 8, padding: '6px 10px', color: '#f87171',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
 
       {/* Bottom info row */}
@@ -265,19 +294,37 @@ function OrderCard({ s, onViewDetail }) {
 }
 
 // ── Main AdminShipmentDashboard ───────────────────────────────────────────────
-export default function AdminShipmentDashboard({ driverShipments = [] }) {
+export default function AdminShipmentDashboard({ driverShipments = [], onRefresh }) {
   const [filter, setFilter] = useState('all');
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState('');
+  const [localShipments, setLocalShipments] = useState(driverShipments);
+
+  // Sync when parent prop changes
+  useState(() => { setLocalShipments(driverShipments); });
+
+  const shipments = driverShipments; // use live socket data
+
+  async function handleCancel(id) {
+    if (!window.confirm('Cancel this shipment?')) return;
+    await serverUpdateShipment(id, { status: 'cancelled', endTime: new Date().toISOString() });
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm('Delete this shipment record?')) return;
+    await serverUpdateShipment(id, { status: 'deleted', endTime: new Date().toISOString() });
+  }
+
+  const visible = shipments.filter(s => s.status !== 'deleted');
 
   const counts = {
-    all:       driverShipments.length,
-    ongoing:   driverShipments.filter(s => s.status === 'ongoing').length,
-    completed: driverShipments.filter(s => s.status === 'completed').length,
-    cancelled: driverShipments.filter(s => s.status === 'cancelled').length,
+    all:       visible.length,
+    ongoing:   visible.filter(s => s.status === 'ongoing').length,
+    completed: visible.filter(s => s.status === 'completed').length,
+    cancelled: visible.filter(s => s.status === 'cancelled').length,
   };
 
-  const filtered = driverShipments
+  const filtered = visible
     .filter(s => filter === 'all' || s.status === filter)
     .filter(s => {
       if (!search) return true;
@@ -363,10 +410,10 @@ export default function AdminShipmentDashboard({ driverShipments = [] }) {
         <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--tx-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Inbox size={40} color="#1e2d45" /></div>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-            {driverShipments.length === 0 ? 'No orders yet' : 'No orders match this filter'}
+            {visible.length === 0 ? 'No orders yet' : 'No orders match this filter'}
           </div>
           <div style={{ fontSize: 12 }}>
-            {driverShipments.length === 0
+            {visible.length === 0
               ? 'Orders will appear here when drivers start shipments'
               : 'Try a different filter or search term'
             }
@@ -375,7 +422,7 @@ export default function AdminShipmentDashboard({ driverShipments = [] }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(s => (
-            <OrderCard key={s.id} s={s} onViewDetail={setDetail} />
+            <OrderCard key={s.id} s={s} onViewDetail={setDetail} onCancel={handleCancel} onDelete={handleDelete} />
           ))}
         </div>
       )}

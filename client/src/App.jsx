@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
@@ -26,8 +26,12 @@ import {
   Rocket, LogOut, Search, Moon, Sun, X,
   CloudSun, CloudRain, Cloud, CloudLightning, Wind,
   TrafficCone, Bell, CheckCircle, Trash2, StopCircle,
-  Loader2, Clock, Activity,
+  Loader2, Clock, Activity, TrendingUp, AlertTriangle,
+  BarChart3, Shield,
 } from 'lucide-react';
+import {
+  AreaChart, Area, ResponsiveContainer, Tooltip,
+} from 'recharts';
 
 // Lazy load the 3D background for performance
 const ThreeBackground = lazy(() => import('./components/ThreeBackground'));
@@ -65,9 +69,43 @@ function useIsMobile() {
   return isMobile;
 }
 
-// ── KPI Card with count-up animation ──────────────────────────────────────────
-function KpiCard({ Icon, iconBg, iconColor, label, value, badge, badgeColor, badgeBg, sub }) {
+// ── Mini sparkline chart for KPI cards using Recharts ─────────────────────────
+function MiniSparkline({ data = [], color = '#3b82f6' }) {
+  if (!data.length) {
+    // Generate random heartbeat-like data for visual interest
+    data = Array.from({ length: 12 }, (_, i) => ({
+      v: 20 + Math.sin(i * 0.8) * 10 + Math.random() * 15,
+    }));
+  }
+  return (
+    <div className="kpi-sparkline">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data}>
+          <defs>
+            <linearGradient id={`spark-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={color}
+            strokeWidth={1.5}
+            fill={`url(#spark-${color.replace('#', '')})`}
+            dot={false}
+            animationDuration={800}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── KPI Card with count-up animation + sparkline ──────────────────────────────
+function KpiCard({ Icon, iconBg, iconColor, label, value, badge, badgeColor, badgeBg, sub, sparklineColor, sparklineData }) {
   const { count, ref } = useCountUp(typeof value === 'number' ? value : 0, 700);
+  const sc = sparklineColor || iconColor;
   return (
     <motion.div
       className="kpi-card"
@@ -85,13 +123,28 @@ function KpiCard({ Icon, iconBg, iconColor, label, value, badge, badgeColor, bad
       <div className="kpi-val" ref={ref}>{count}</div>
       <div className="kpi-lbl">{label}</div>
       {sub && <div className="kpi-sub">{sub}</div>}
+      <MiniSparkline color={sc} data={sparklineData} />
     </motion.div>
+  );
+}
+
+// ── Live time pill ─────────────────────────────────────────────────────────────
+function LiveTime() {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="hdr-pill">
+      <div className="live-dot" style={{ width: 6, height: 6 }} />
+      <span>{time.toLocaleTimeString()}</span>
+    </div>
   );
 }
 
 // ── Bottom Sheet (mobile) ─────────────────────────────────────────────────────
 function BottomSheet({ open, onClose, title, Icon, children }) {
-  // Prevent body scroll when open
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
@@ -138,10 +191,23 @@ export default function App() {
 
   const { history, addShipment, stopShipment, deleteShipment, completeShipment, updateLiveLocation } = useShipmentHistory();
 
-  // ── Show public tracking page if ?tracking= param present ─────────────────────
+  // ── All useMemo hooks must be BEFORE any early returns ────────────────────
+  const sparklineData = useMemo(() =>
+    Array.from({ length: 12 }, (_, i) => ({ v: 30 + Math.sin(i * 0.8) * 15 + Math.random() * 20 })), []
+  );
+  const sparklineGreen = useMemo(() =>
+    Array.from({ length: 12 }, (_, i) => ({ v: 40 + Math.sin(i * 0.5 + 1) * 10 + Math.random() * 15 })), []
+  );
+  const sparklineAmber = useMemo(() =>
+    Array.from({ length: 12 }, (_, i) => ({ v: 25 + Math.sin(i * 0.7 + 2) * 12 + Math.random() * 10 })), []
+  );
+  const sparklineRed = useMemo(() =>
+    Array.from({ length: 12 }, (_, i) => ({ v: 15 + Math.sin(i * 0.6 + 3) * 8 + Math.random() * 12 })), []
+  );
+
+  // ── Early returns AFTER all hooks ─────────────────────────────────────────
   if (_isTracking) return <TrackingPage />;
 
-  // ── Show login if not authenticated ─────────────────────────────────────────
   if (authLoading) return (
     <div style={{ minHeight: '100vh', background: '#020817', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ textAlign: 'center' }}>
@@ -186,6 +252,7 @@ export default function App() {
       Icon: Package, iconBg: 'rgba(59,130,246,0.15)', iconColor: '#60a5fa',
       label: 'Total Orders', value: kpiSource.length,
       badge: `${ongoingCount} active`, badgeColor: '#60a5fa', badgeBg: 'rgba(59,130,246,0.12)',
+      sparklineColor: '#60a5fa', sparklineData,
     },
     {
       Icon: CheckCircle, iconBg: 'rgba(34,197,94,0.15)', iconColor: '#4ade80',
@@ -193,6 +260,7 @@ export default function App() {
       badge: kpiSource.length ? `${onTimePct}%` : '—',
       badgeColor: '#4ade80', badgeBg: 'rgba(34,197,94,0.12)',
       sub: 'successfully delivered',
+      sparklineColor: '#4ade80', sparklineData: sparklineGreen,
     },
     {
       Icon: Truck, iconBg: 'rgba(245,158,11,0.15)', iconColor: '#fcd34d',
@@ -200,6 +268,7 @@ export default function App() {
       badge: atRisk > 0 ? 'Active' : 'None',
       badgeColor: atRisk > 0 ? '#fcd34d' : '#4ade80',
       badgeBg: atRisk > 0 ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)',
+      sparklineColor: '#fcd34d', sparklineData: sparklineAmber,
     },
     {
       Icon: StopCircle, iconBg: 'rgba(239,68,68,0.15)', iconColor: '#f87171',
@@ -207,9 +276,10 @@ export default function App() {
       badge: delayed > 0 ? 'Stopped' : 'None',
       badgeColor: delayed > 0 ? '#f87171' : '#4ade80',
       badgeBg: delayed > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
+      sparklineColor: '#f87171', sparklineData: sparklineRed,
     },
-    ...(autoSwitched > 0 ? [{ Icon: Shuffle, iconBg: 'rgba(167,139,250,0.15)', iconColor: '#a78bfa', label: 'Auto-Switched', value: autoSwitched, badge: 'By AI', badgeColor: '#a78bfa', badgeBg: 'rgba(167,139,250,0.12)' }] : []),
-    ...(alerts?.length > 0 ? [{ Icon: Bell, iconBg: 'rgba(239,68,68,0.15)', iconColor: '#f87171', label: 'Live Alerts', value: alerts.length, badge: 'Real-time', badgeColor: '#f87171', badgeBg: 'rgba(239,68,68,0.12)' }] : []),
+    ...(autoSwitched > 0 ? [{ Icon: Shuffle, iconBg: 'rgba(167,139,250,0.15)', iconColor: '#a78bfa', label: 'Auto-Switched', value: autoSwitched, badge: 'By AI', badgeColor: '#a78bfa', badgeBg: 'rgba(167,139,250,0.12)', sparklineColor: '#a78bfa', sparklineData }] : []),
+    ...(alerts?.length > 0 ? [{ Icon: Bell, iconBg: 'rgba(239,68,68,0.15)', iconColor: '#f87171', label: 'Live Alerts', value: alerts.length, badge: 'Real-time', badgeColor: '#f87171', badgeBg: 'rgba(239,68,68,0.12)', sparklineColor: '#f87171', sparklineData: sparklineRed }] : []),
   ];
 
   // ── Shared LiveMap ────────────────────────────────────────────────────────
@@ -248,6 +318,11 @@ export default function App() {
     />
   );
 
+  // Get user initials for avatar
+  const initials = user?.name
+    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'SC';
+
   return (
     <div className="app-shell" data-theme={dark ? 'dark' : 'light'}>
       {/* ── 3D Animated Background ── */}
@@ -273,7 +348,13 @@ export default function App() {
       {/* ── Desktop Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="brand-icon"><Rocket size={16} color="#fff" strokeWidth={2} /></div>
+          <motion.div
+            className="brand-icon"
+            animate={{ boxShadow: ['0 0 16px rgba(59,130,246,0.4)', '0 0 24px rgba(59,130,246,0.6)', '0 0 16px rgba(59,130,246,0.4)'] }}
+            transition={{ duration: 3, repeat: Infinity }}
+          >
+            <Rocket size={16} color="#fff" strokeWidth={2} />
+          </motion.div>
           <div>
             <div className="brand-name">SupplyChain</div>
             <div className="brand-sub">Guardian Platform</div>
@@ -298,38 +379,58 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          {/* User info */}
-          <div style={{ padding: '8px 12px', marginBottom: 6, borderRadius: 'var(--r-md)', background: 'var(--glass)', border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx-1)' }}>{user.name}</div>
-            <div style={{ fontSize: 10, color: 'var(--tx-3)', marginTop: 1, textTransform: 'capitalize' }}>{user.role}</div>
-          </div>
+          {/* User avatar + info */}
+          <motion.div
+            className="sidebar-user"
+            whileHover={{ x: 2 }}
+          >
+            <div className="sidebar-avatar">{initials}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="sidebar-user-name">{user.name}</div>
+              <div className="sidebar-user-role">{user.role}</div>
+            </div>
+          </motion.div>
+          
+          {/* Live status */}
           <div className="sys-status">
             <div className="live-dot" />
             <span style={{ fontSize: 11, color: 'var(--tx-2)', fontWeight: 500 }}>
               {env.apiStatus?.weather === 'live' ? 'Live APIs' : 'Heuristic Mode'}
             </span>
           </div>
-          <button onClick={logout} style={{
-            width: '100%', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-            borderRadius: 'var(--r-md)', padding: '7px 12px',
-            color: '#f87171', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-          }}>
+
+          {/* Logout button */}
+          <motion.button
+            onClick={logout}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            style={{
+              width: '100%', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+              borderRadius: 'var(--r-md)', padding: '7px 12px',
+              color: '#f87171', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'inherit', transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.35)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.2)'; }}
+          >
             <LogOut size={13} /> Sign Out
-          </button>
+          </motion.button>
         </div>
       </aside>
 
       {/* ── Main Area ── */}
       <div className="main-area">
 
-        {/* ── Top Bar ── */}
+        {/* ── Top Header ── */}
         <header className="top-bar">
           {/* Mobile: show brand */}
           {isMobile ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div className="brand-icon"><Rocket size={13} color="#fff" strokeWidth={2} /></div>
-              <div className="brand-name">SupplyChain</div>
+              <div className="brand-icon" style={{ width: 28, height: 28 }}>
+                <Rocket size={12} color="#fff" strokeWidth={2} />
+              </div>
+              <div className="brand-name" style={{ fontSize: 12 }}>SupplyChain</div>
             </div>
           ) : (
             <div className="top-bar-title">
@@ -340,13 +441,13 @@ export default function App() {
 
           <div className="top-bar-space" />
 
-          {/* Weather pill — always visible */}
+          {/* Weather pill */}
           <div className="hdr-pill" style={{ display: 'flex' }}>
             <WeatherIcon w={env.weather} size={13} />
             <span style={{ color: weatherColor(env.weather), fontWeight: 600 }}>{env.weather || 'Clear'}</span>
           </div>
 
-          {/* Traffic pill — desktop only (hidden via CSS) */}
+          {/* Traffic pill — desktop only */}
           <div className="hdr-pill">
             <TrafficCone size={13} color={trafficPct > 70 ? 'var(--red)' : trafficPct > 50 ? 'var(--amber)' : 'var(--green)'} />
             <span style={{ fontWeight: 600, color: trafficPct > 70 ? 'var(--red)' : trafficPct > 50 ? 'var(--amber)' : 'var(--green)' }}>
@@ -354,30 +455,34 @@ export default function App() {
             </span>
           </div>
 
-          {env.lastUpdated && (
-            <div className="hdr-pill">
-              <div className="live-dot" style={{ width: 6, height: 6 }} />
-              <span>{new Date(env.lastUpdated).toLocaleTimeString()}</span>
-            </div>
-          )}
+          {/* Live time pill */}
+          <LiveTime />
 
-          <button className="theme-btn" onClick={() => setDark(d => !d)} title="Toggle theme">
+          {/* Theme toggle */}
+          <motion.button
+            className="theme-btn"
+            onClick={() => setDark(d => !d)}
+            title="Toggle theme"
+            whileHover={{ rotate: 20, scale: 1.1 }}
+          >
             {dark ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
+          </motion.button>
 
           {/* Mobile logout button */}
           {isMobile && (
-            <button
+            <motion.button
               onClick={logout}
+              whileTap={{ scale: 0.95 }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
                 borderRadius: 8, padding: '5px 10px',
                 color: '#f87171', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                fontFamily: 'inherit',
               }}
             >
               <LogOut size={13} /> Logout
-            </button>
+            </motion.button>
           )}
         </header>
 
@@ -389,7 +494,6 @@ export default function App() {
             {/* Plan tab: fullscreen map */}
             {tab === 'plan' && (
               <>
-                {/* Fullscreen map */}
                 <div className="mobile-map-container">
                   <div className="map-wrap" style={{ height: '100%' }}>
                     {liveMap}
@@ -413,7 +517,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Floating action buttons */}
                 <div className="mobile-map-fabs">
                   <button
                     className="mobile-fab"
@@ -424,7 +527,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Bottom sheet: TripPlanner */}
                 <BottomSheet
                   open={sheetOpen}
                   onClose={() => setSheetOpen(false)}
@@ -447,7 +549,7 @@ export default function App() {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.22 }}
                   >
-                    {/* KPI grid */}
+                    {/* KPI grid with sparklines */}
                     <div className="kpi-grid" style={{ marginBottom: 14 }}>
                       {kpiCards.map((k, i) => <KpiCard key={i} {...k} />)}
                     </div>
@@ -532,7 +634,7 @@ export default function App() {
              ══════════════════════════════════════════════════════════════════ */
           <main className="page">
 
-            {/* KPI row */}
+            {/* KPI row with sparklines */}
             <div className="kpi-grid">
               {kpiCards.map((k, i) => <KpiCard key={i} {...k} />)}
             </div>
