@@ -327,7 +327,7 @@ export default function App() {
         <header className="top-bar">
           {/* Mobile: show brand */}
           {isMobile ? (
-            <div className="mobile-topbar-brand">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div className="brand-icon"><Rocket size={13} color="#fff" strokeWidth={2} /></div>
               <div className="brand-name">SupplyChain</div>
             </div>
@@ -364,6 +364,21 @@ export default function App() {
           <button className="theme-btn" onClick={() => setDark(d => !d)} title="Toggle theme">
             {dark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
+
+          {/* Mobile logout button */}
+          {isMobile && (
+            <button
+              onClick={logout}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 8, padding: '5px 10px',
+                color: '#f87171', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              <LogOut size={13} /> Logout
+            </button>
+          )}
         </header>
 
         {/* ════════════════════════════════════════════════════════════════════
