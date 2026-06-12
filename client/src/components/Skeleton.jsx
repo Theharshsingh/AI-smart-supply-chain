@@ -46,12 +46,15 @@ export function KPISkeleton() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.08, duration: 0.3 }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div className="skeleton-pulse" style={{ width: 36, height: 36, borderRadius: 10 }} />
-            <div className="skeleton-pulse" style={{ width: 50, height: 20, borderRadius: 10 }} />
+          <div className="shimmer" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, borderRadius: 'var(--r-lg)' }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div className="skeleton-pulse" style={{ width: 36, height: 36, borderRadius: 10 }} />
+              <div className="skeleton-pulse" style={{ width: 50, height: 20, borderRadius: 10 }} />
+            </div>
+            <div className="skeleton-line" style={{ width: '50%', height: 28, marginBottom: 4 }} />
+            <div className="skeleton-line" style={{ width: '65%', height: 12 }} />
           </div>
-          <div className="skeleton-line" style={{ width: '50%', height: 28, marginBottom: 4 }} />
-          <div className="skeleton-line" style={{ width: '65%', height: 12 }} />
         </motion.div>
       ))}
     </div>
@@ -69,6 +72,17 @@ export function AlertSkeleton() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+export function ChartSkeleton() {
+  return (
+    <div className="skeleton-card" style={{ minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div className="skeleton-pulse" style={{ width: 32, height: 32, borderRadius: 8, margin: '0 auto 8px' }} />
+        <div className="skeleton-line" style={{ width: 120, height: 14 }} />
+      </div>
     </div>
   );
 }

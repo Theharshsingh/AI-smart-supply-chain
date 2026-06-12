@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Trash2, Eye, Square, MapPin, Clock, CheckCircle, XCircle, Loader, Navigation, QrCode, Copy, Check, Package, Inbox, SignalZero, Signal, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Trash2, Eye, Square, MapPin, Clock, CheckCircle, XCircle, Loader, Navigation, QrCode, Copy, Check, Package, Inbox, SignalZero, Signal, X, TrendingUp } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -30,11 +31,12 @@ function fmtDist(m) {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`;
 }
 
+// ── Enhanced Status Badge with pulsing dot ─────────────────────────────────────
 function StatusBadge({ status }) {
   const map = {
-    ongoing:   { bg: '#052e16', color: '#4ade80', border: '#166534', icon: <Loader size={10} />,      label: 'Ongoing' },
-    completed: { bg: '#0c1a3a', color: '#60a5fa', border: '#1e40af', icon: <CheckCircle size={10} />, label: 'Delivered' },
-    cancelled: { bg: '#450a0a', color: '#f87171', border: '#991b1b', icon: <XCircle size={10} />,     label: 'Cancelled' },
+    ongoing:   { bg: '#052e16', color: '#4ade80', border: '#166534', icon: <Loader size={10} className="spin-anim" />, label: 'Ongoing', dotClass: 'green' },
+    completed: { bg: '#0c1a3a', color: '#60a5fa', border: '#1e40af', icon: <CheckCircle size={10} />, label: 'Delivered', dotClass: 'blue' },
+    cancelled: { bg: '#450a0a', color: '#f87171', border: '#991b1b', icon: <XCircle size={10} />, label: 'Cancelled', dotClass: 'red' },
   };
   const s = map[status] || map.cancelled;
   return (
@@ -43,8 +45,19 @@ function StatusBadge({ status }) {
       background: s.bg, color: s.color, border: `1px solid ${s.border}`,
       borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700,
     }}>
+      <span className={`status-dot ${s.dotClass}`} />
       {s.icon} {s.label}
     </span>
+  );
+}
+
+// ── Progress bar with gradient fill ────────────────────────────────────────────
+function ProgressBar({ progress = 0 }) {
+  const pct = Math.min(Math.max(progress, 0), 100);
+  return (
+    <div className="progress-bar-track" style={{ height: 5 }}>
+      <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+    </div>
   );
 }
 
@@ -84,7 +97,6 @@ function QRModal({ shipment, onClose }) {
   if (!shipment) return null;
 
   const trackingUrl = (() => {
-    // Encode shipment data directly in URL so any device can open it
     const payload = {
       id: shipment.id,
       from: shipment.from,
@@ -111,48 +123,46 @@ function QRModal({ shipment, onClose }) {
   }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-    }} onClick={onClose}>
-      <div style={{
-        background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 20, padding: 28, width: '100%', maxWidth: 380,
-        boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
-      }} onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }} onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        style={{
+          background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 20, padding: 28, width: '100%', maxWidth: 380,
+          boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+        }} onClick={e => e.stopPropagation()}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}><Package size={16} color="#60a5fa" /> Track Shipment</div>
             <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Share this with your customer</div>
           </div>
-          <button onClick={onClose} style={{
+          <motion.button onClick={onClose} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} style={{
             width: 30, height: 30, borderRadius: '50%',
             background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
             color: '#64748b', cursor: 'pointer', fontSize: 14,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}><X size={14} /></button>
+          }}><X size={14} /></motion.button>
         </div>
 
-        {/* QR Code */}
         <div style={{
           background: '#fff', borderRadius: 16, padding: 20,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           marginBottom: 20, boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
         }}>
-          <QRCodeSVG
-            value={trackingUrl}
-            size={200}
-            bgColor="#ffffff"
-            fgColor="#0f172a"
-            level="M"
-            includeMargin={false}
-          />
+          <QRCodeSVG value={trackingUrl} size={200} bgColor="#ffffff" fgColor="#0f172a" level="M" includeMargin={false} />
         </div>
 
-        {/* Tracking ID */}
         <div style={{
           background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
           borderRadius: 10, padding: '10px 14px', marginBottom: 14, textAlign: 'center',
@@ -163,7 +173,6 @@ function QRModal({ shipment, onClose }) {
           </div>
         </div>
 
-        {/* Route summary */}
         <div style={{
           background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12,
@@ -179,8 +188,7 @@ function QRModal({ shipment, onClose }) {
           </div>
         </div>
 
-        {/* Copy link button */}
-        <button onClick={copyLink} style={{
+        <motion.button onClick={copyLink} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           background: copied ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'linear-gradient(135deg,#3b82f6,#2563eb)',
           border: 'none', borderRadius: 12, padding: '12px 20px',
@@ -188,33 +196,58 @@ function QRModal({ shipment, onClose }) {
           transition: 'all 0.25s', boxShadow: copied ? '0 4px 16px rgba(34,197,94,0.3)' : '0 4px 16px rgba(59,130,246,0.3)',
         }}>
           {copied ? <><Check size={15} /> Link Copied!</> : <><Copy size={15} /> Copy Tracking Link</>}
-        </button>
+        </motion.button>
 
         <div style={{ fontSize: 10, color: '#334155', textAlign: 'center', marginTop: 12 }}>
           Customer can scan QR or open the link to track live
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
 // ── Detail Modal ──────────────────────────────────────────────────────────────
 function DetailModal({ shipment, onClose }) {
   if (!shipment) return null;
+  const progress = shipment.distanceKm && shipment.durationMin
+    ? Math.min(100, Math.round((shipment.durationMin / 120) * 100))
+    : 0;
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
-      <div style={{
-        background: '#111827', border: '1px solid #1e2d45', borderRadius: 16,
-        padding: 24, minWidth: 340, maxWidth: 480, width: '90%',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
-      }} onClick={e => e.stopPropagation()}>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }} onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        style={{
+          background: '#111827', border: '1px solid #1e2d45', borderRadius: 16,
+          padding: 24, minWidth: 340, maxWidth: 480, width: '90%',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
+        }} onClick={e => e.stopPropagation()}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <div style={{ fontWeight: 800, fontSize: 15, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}><Package size={15} color="#60a5fa" /> Shipment Details</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
+          <motion.button onClick={onClose} whileHover={{ scale: 1.1 }} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex' }}><X size={18} /></motion.button>
         </div>
+
+        {/* Progress bar */}
+        {shipment.status === 'ongoing' && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>Progress</span>
+              <span style={{ fontSize: 10, color: '#60a5fa', fontWeight: 700 }}>{progress}%</span>
+            </div>
+            <ProgressBar progress={progress} />
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: '#0a0e1a', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase' }}>Route</div>
@@ -244,21 +277,37 @@ function DetailModal({ shipment, onClose }) {
             ))}
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
-// ── Single shipment card with live GPS tracking ───────────────────────────────
+// ── Single shipment card with live GPS tracking + progress bar ────────────────
 function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR }) {
   const isOngoing = s.status === 'ongoing';
   const { distM, gpsError } = useGpsDistance(s.toLat, s.toLon, isOngoing);
   const nearDest = distM != null && distM <= 500;
 
-  return (
-    <div className="card" style={{ padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+  // Calculate progress for ongoing shipments
+  const estDurationMs = s.durationMin ? s.durationMin * 60 * 1000 : 1;
+  const elapsedMs = Date.now() - new Date(s.startTime).getTime();
+  const progress = isOngoing ? Math.min(95, Math.round((elapsedMs / estDurationMs) * 100)) : s.status === 'completed' ? 100 : 0;
 
+  return (
+    <motion.div
+      className="shipment-card"
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 24 }}
+      whileHover={{ x: 3 }}
+      style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 14, padding: '14px 16px',
+        transition: 'all 0.15s',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         {/* Route info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -283,6 +332,21 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
               {s.to?.split(',')[0]}
             </span>
           </div>
+
+          {/* Progress bar */}
+          {(isOngoing || s.status === 'completed') && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 9, color: '#475569', fontWeight: 600 }}>
+                  {isOngoing ? 'In Progress' : 'Completed'}
+                </span>
+                <span style={{ fontSize: 9, color: isOngoing ? '#60a5fa' : '#4ade80', fontWeight: 700 }}>
+                  {progress}%
+                </span>
+              </div>
+              <ProgressBar progress={progress} />
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -322,8 +386,10 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
 
         {/* Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-          <button
+          <motion.button
             onClick={() => onShowQR(s)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             title="Show QR code & tracking link"
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
@@ -332,11 +398,13 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
               fontSize: 11, fontWeight: 600, cursor: 'pointer',
             }}
           >
-            <QrCode size={12} /> QR / Share
-          </button>
+            <QrCode size={12} /> QR
+          </motion.button>
 
-          <button
+          <motion.button
             onClick={() => onViewDetail(s)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               background: '#0c1a3a', border: '1px solid #1e40af',
@@ -345,13 +413,14 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
             }}
           >
             <Eye size={12} /> Details
-          </button>
+          </motion.button>
 
-          {/* Reached Location button — enabled only within 500m */}
           {isOngoing && (
-            <button
+            <motion.button
               onClick={() => nearDest && onComplete(s.id)}
               disabled={!nearDest}
+              whileHover={nearDest ? { scale: 1.05 } : {}}
+              whileTap={nearDest ? { scale: 0.95 } : {}}
               title={nearDest ? 'Mark as delivered' : `Get within 500m of destination (currently ${fmtDist(distM) || 'locating…'})`}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
@@ -367,13 +436,15 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
               }}
             >
               <Navigation size={12} />
-              {nearDest ? 'Reached!' : 'Reached Location'}
-            </button>
+              {nearDest ? 'Reached!' : 'Reached'}
+            </motion.button>
           )}
 
           {isOngoing && (
-            <button
+            <motion.button
               onClick={() => onStop(s.id)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 background: '#422006', border: '1px solid #92400e',
@@ -382,11 +453,13 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
               }}
             >
               <Square size={11} fill="#fb923c" /> Stop
-            </button>
+            </motion.button>
           )}
 
-          <button
+          <motion.button
             onClick={() => onDelete(s.id)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               background: '#450a0a', border: '1px solid #991b1b',
@@ -395,10 +468,10 @@ function ShipmentCard({ s, onStop, onDelete, onComplete, onViewDetail, onShowQR 
             }}
           >
             <Trash2 size={12} /> Delete
-          </button>
+          </motion.button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -418,11 +491,20 @@ export default function ShipmentDashboard({ history, onStop, onDelete, onComplet
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <DetailModal shipment={detail} onClose={() => setDetail(null)} />
-      <QRModal shipment={qrShipment} onClose={() => setQrShipment(null)} />
+      <AnimatePresence>
+        {detail && <DetailModal shipment={detail} onClose={() => setDetail(null)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {qrShipment && <QRModal shipment={qrShipment} onClose={() => setQrShipment(null)} />}
+      </AnimatePresence>
 
       {/* Header + filters */}
-      <div className="card" style={{ padding: '14px 16px' }}>
+      <motion.div
+        className="card"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ padding: '14px 16px' }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ fontWeight: 800, fontSize: 15, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}><Package size={15} color="#60a5fa" /> My Shipments</div>
           <span style={{ fontSize: 11, color: '#475569' }}>{history.length} total</span>
@@ -444,13 +526,18 @@ export default function ShipmentDashboard({ history, onStop, onDelete, onComplet
             </button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
+        <motion.div
+          className="card"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}
+        >
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}><Inbox size={36} color="#1e2d45" /></div>
           <div style={{ fontSize: 13 }}>No shipments yet. Plan a route and start a shipment!</div>
-        </div>
+        </motion.div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map((s, i) => (
