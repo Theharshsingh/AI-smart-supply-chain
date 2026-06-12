@@ -545,7 +545,7 @@ export default function CustomerDashboard({ initialTab = 'book' }) {
         toast.error(data.error || 'Failed to create order');
       }
     } catch (e) {
-      toast.error('Network error');
+      toast.error(e.message || 'Network error. Is the server running?');
     }
     setSubmitting(false);
   }
