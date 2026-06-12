@@ -1,0 +1,108 @@
+[dotenv@17.3.1] injecting env (5) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[Server] Running on :4000
+[DB] MongoDB connected
+[Auth] Default admin created: admin@supplychain.com / admin123
+[Refresh] weather=Rain traffic=30% dirs=0
+[Server] Started
+[Refresh] weather=Cloudy traffic=24% dirs=0
+[Refresh] weather=Clear traffic=23% dirs=0
+[Refresh] weather=Clear traffic=27% dirs=0
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Storm traffic=30% dirs=0
+[Refresh] weather=Storm traffic=24% dirs=0
+[Refresh] weather=Storm traffic=25% dirs=0
+[Refresh] weather=Storm traffic=28% dirs=0
+[Refresh] weather=Clear traffic=31% dirs=0
+[Refresh] weather=Clear traffic=34% dirs=0
+[Refresh] weather=Clear traffic=30% dirs=0
+[Refresh] weather=Clear traffic=33% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=35% dirs=0
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Clear traffic=30% dirs=0
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Clear traffic=27% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=24% dirs=0
+[Refresh] weather=Clear traffic=29% dirs=0
+[Refresh] weather=Clear traffic=34% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=23% dirs=0
+[Refresh] weather=Clear traffic=26% dirs=0
+[Refresh] weather=Clear traffic=35% dirs=0
+[Refresh] weather=Clear traffic=33% dirs=0
+[Refresh] weather=Clear traffic=33% dirs=0
+[Refresh] weather=Clear traffic=35% dirs=0
+[Refresh] weather=Clear traffic=27% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Clear traffic=35% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=34% dirs=0
+[Refresh] weather=Clear traffic=24% dirs=0
+[Refresh] weather=Clear traffic=25% dirs=0
+[Refresh] weather=Clear traffic=25% dirs=0
+[Refresh] weather=Clear traffic=25% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Clear traffic=27% dirs=0
+[Refresh] weather=Clear traffic=32% dirs=0
+[Refresh] weather=Clear traffic=32% dirs=0
+[Refresh] weather=Clear traffic=29% dirs=0
+[Refresh] weather=Clear traffic=30% dirs=0
+[Refresh] weather=Clear traffic=27% dirs=0
+[Refresh] weather=Clear traffic=23% dirs=0
+[Refresh] weather=Clear traffic=32% dirs=0
+[Refresh] weather=Clear traffic=24% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=37% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Clear traffic=35% dirs=0
+[Refresh] weather=Clear traffic=36% dirs=0
+[Refresh] weather=Clear traffic=23% dirs=0
+[Refresh] weather=Clear traffic=31% dirs=0
+[Refresh] weather=Clear traffic=36% dirs=0
+[Refresh] weather=Clear traffic=26% dirs=0
+[Refresh] weather=Clear traffic=34% dirs=0
+[Refresh] weather=Clear traffic=26% dirs=0
+[Refresh] weather=Clear traffic=27% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=26% dirs=0
+[Refresh] weather=Clear traffic=35% dirs=0
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Clear traffic=30% dirs=0
+[Refresh] weather=Clear traffic=32% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=24% dirs=0
+[Refresh] weather=Clear traffic=34% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=26% dirs=0
+[Refresh] weather=Clear traffic=24% dirs=0
+[Refresh] weather=Clear traffic=31% dirs=0
+[Refresh] weather=Clear traffic=26% dirs=0
+[Refresh] weather=Clear traffic=32% dirs=0
+[Refresh] weather=Clear traffic=31% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=31% dirs=0
+[Refresh] weather=Clear traffic=36% dirs=0
+[Refresh] weather=Clear traffic=27% dirs=0
+[Refresh] weather=Clear traffic=24% dirs=0
+[Refresh] weather=Clear traffic=24% dirs=0
+[Refresh] weather=Clear traffic=27% dirs=0
+[Refresh] weather=Clear traffic=25% dirs=0
+[Weather/OpenMeteo] timeout of 8000ms exceeded
+[Refresh] weather=Clear traffic=29% dirs=0
+[Refresh] weather=Clear traffic=29% dirs=0
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Clear traffic=35% dirs=0
+[Refresh] weather=Clear traffic=25% dirs=0
+[Refresh] weather=Clear traffic=32% dirs=0
+[Refresh] weather=Clear traffic=22% dirs=0
+[Refresh] weather=Clear traffic=26% dirs=0
+[Refresh] weather=Clear traffic=28% dirs=0
+[Refresh] weather=Clear traffic=33% dirs=0
+[2026-06-12T09:02:08.124Z] [PID: 16832] [32m[NODE-CRON][32m [33m[WARN][0m missed execution at Fri Jun 12 2026 14:32:00 GMT+0530 (India Standard Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
