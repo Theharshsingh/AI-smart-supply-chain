@@ -7,6 +7,7 @@ const cron   = require('node-cron');
 const { connectDB } = require('./db');
 const { registerAuthRoutes, authMiddleware, adminOnly, customerOnly, driverOnly, seedDefaultUsers } = require('./auth');
 const { registerOrderRoutes } = require('./orders');
+const { registerChatbotRoutes } = require('./chatbot');
 const { DriverShipment } = require('./models');
 
 const { generateShipments, interpolate, advanceAlongPolyline, geocodePlace, getAutocompleteSuggestions } = require('./data');
@@ -25,6 +26,7 @@ app.use(express.json());
 // ── Auth routes ──────────────────────────────────────────────────────────────
 registerAuthRoutes(app);
 registerOrderRoutes(app, io, authMiddleware, adminOnly, customerOnly, driverOnly);
+registerChatbotRoutes(app, authMiddleware, adminOnly);
 
 // ── Driver Shipments Store (MongoDB) ─────────────────────────────────────────
 async function broadcastDriverShipments() {

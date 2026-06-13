@@ -21,6 +21,8 @@ import DriverOrdersPanel from './components/DriverOrdersPanel';
 import { useShipmentHistory } from './hooks/useShipmentHistory';
 import { useAuth } from './hooks/useAuth';
 import { weatherColor } from './utils';
+import ChatWidget from './components/ChatWidget';
+import ChatAdmin from './components/ChatAdmin';
 import { CardSkeleton, MapSkeleton, KPISkeleton, AlertSkeleton } from './components/Skeleton';
 import useCountUp from './hooks/useCountUp';
 import {
@@ -49,7 +51,8 @@ const TABS = [
   { id: 'insights',  label: 'Insights',      Icon: Brain,   roles: ['admin'] },
   { id: 'livedata',  label: 'Live Data',     Icon: Globe,   roles: ['admin'] },
   { id: 'book',      label: 'Book Shipment', Icon: Package, roles: ['customer'] },
-  { id: 'customer-orders', label: 'My Orders', Icon: Truck, roles: ['customer'] },
+  { id: 'customer-orders',  label: 'My Orders',     Icon: Truck,  roles: ['customer'] },
+  { id: 'chatbot-admin',    label: 'Chatbot Admin',  Icon: Brain,  roles: ['admin'] },
 ];
 
 function WeatherIcon({ w, size = 14 }) {
@@ -723,9 +726,19 @@ export default function App() {
               </div>
             )}
 
+            {/* Chatbot Admin */}
+            {tab === 'chatbot-admin' && user.role === 'admin' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <ChatAdmin />
+              </motion.div>
+            )}
+
           </main>
         )}
       </div>
+
+      {/* Chat Widget — visible to customers only */}
+      {user.role === 'customer' && <ChatWidget />}
     </div>
   );
 }

@@ -10,8 +10,15 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: {
       proxy: {
-        '/api': apiUrl,
-        '/socket.io': { target: apiUrl, ws: true },
+        '/api': {
+          target: apiUrl,
+          changeOrigin: true,
+        },
+        '/socket.io': {
+          target: apiUrl,
+          ws: true,
+          changeOrigin: true,
+        },
       },
     },
   }

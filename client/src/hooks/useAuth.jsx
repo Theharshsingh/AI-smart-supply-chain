@@ -8,15 +8,30 @@ export function AuthProvider({ children }) {
   const [token, setToken]     = useState(() => localStorage.getItem('auth_token'));
   const [loading, setLoading] = useState(true);
 
-  // Verify token on mount
+  // Verify token on mount — if server unreachable or token invalid, clear it
   useEffect(() => {
     if (!token) { setLoading(false); return; }
+    // First check if server is reachable at all
     fetch(`${API_URL}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (!r.ok) {
+          // Token invalid — clear it
+          localStorage.removeItem('auth_token');
+          setToken(null);
+          return null;
+        }
+        return r.json();
+      })
       .then(u => { setUser(u); setLoading(false); })
-      .catch(() => { setLoading(false); });
+      .catch(() => {
+        // Server unreachable — could be stale token from old production URL
+        // Clear the token so the login page shows instead of white screen
+        localStorage.removeItem('auth_token');
+        setToken(null);
+        setLoading(false);
+      });
   }, []);
 
   async function login(email, password) {
